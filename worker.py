@@ -4,52 +4,56 @@
 @date: 2013-06-02
 @author: shell.xu
 '''
-import re, os, sys, pprint, urllib, logging
+import re, os, sys, pprint, logging
 from urlparse import urlparse
 from os import path
-import yaml
+import yaml, redis, beanstalkc
 import gevent, gevent.pool
-import lxml.html
 
 logger = logging.getLogger('worker')
 
 class Worker(object):
 
-    def __init__(self, funcfile, psize=1000):
+    def __init__(self, name, funcfile, host='localhost', size=100, port=11300):
+        self.queue = beanstalkc.Connection(host=host, port=port)
+        self.queue.use('%s' % name)
+        self.queue.watch('%s' % name)
+        self.name = name
         self.cfgs = loadcfg(funcfile)
-        self.pool = gevent.pool.Pool(psize)
+        self.pool = gevent.pool.Pool(size)
 
-    def do(self, req):
-        # do those async
-        resp = self.http_client(req)
-        resp = self.http_parse(resp)
+    def run(self):
+        while True:
+            job = self.queue.reserve()
+            self.pool.spawn(self.async_run, job)
+
+    def async_run(self, job):
+        req = job.body
+        logger.debug('get: ' + req)
         for m, n, p in dispatch(self.cfgs, req):
-            logger.info('%s:%s run.' % (n, p['funcname']))
-            rslt, reqs = p['function'](resp, *m, **p.copy())
+            logger.info('%s run.' % p['handler'])
+            if m is None: m = []
+            rslt, reqs = p['function'](req, *m)
             # howto process rslt
             logger.info('result: %s' % str(rslt))
-            # send reqs to mgr
+            if reqs:
+                for req in reqs: self.request(req)
+        job.delete()
 
-    def run(self, msg):
-        while True: self.pool.spawn(self.do, msg.recv())
-
-    def http_client(self, req):
-        logger.debug('http get: ' + str(req))
-        return urllib.urlopen(req).read()
-
-    def http_parse(self, resp):
-        logger.debug('http parse length %d' % len(resp))
-        return lxml.html.fromstring(resp)
+    def request(self, url, headers=None, body=None, method='GET'):
+        self.queue.put(url)
+        logger.debug('put: ' + str(url))
 
 def loadcfg(cfgfile):
     with open(cfgfile) as fi: cfgs = yaml.load(fi.read())
     sys.path.append(path.dirname(cfgfile))
     for cfg in cfgs:
-        cfg['module'] = __import__(cfg['file'])
         cfg['base'] = urlparse(cfg['host'])
         for p in cfg['patterns']:
+            modname, funcname = p['handler'].split(':')
+            if not modname: modname = cfg['file']
+            p['function'] = getattr(__import__(modname), funcname)
             p['re'] = re.compile(p['match'])
-            p['function'] = getattr(cfg['module'], p['funcname'])
     sys.path.pop(-1)
     return cfgs
 
@@ -58,8 +62,10 @@ def dispatch(cfgs, url):
     for cfg in cfgs:
         if cfg['base'].netloc != u.netloc: continue
         if cfg['base'].scheme != u.scheme: continue
+        if not u.path.startswith(cfg['base'].path): continue
+        upath = u.path[len(cfg['base'].path):]
         for p in cfg['patterns']:
-            m = p['re'].match(u.path)
+            m = p['re'].match(upath)
             if m is not None:
                 yield m.groups(), cfg['name'], p
 

@@ -7,8 +7,7 @@
 import os, sys, logging
 import gevent
 from gevent import monkey
-import manager, worker
-import q_redis, redis
+import worker
 from lxml import html
 
 monkey.patch_all()
@@ -27,15 +26,8 @@ def initlog(lv, logfile=None):
 
 def main():
     initlog('DEBUG')
-    rds = redis.StrictRedis(host='localhost', port=6379, db=0)
-    
-    msg = q_redis.Msg(rds, 'worker1')
-    w = worker.Worker('spec/siren.cfg')
-    gr = gevent.spawn(w.run, msg)
-
-    mgr = manager.Manager(
-        q_redis.Queue(rds), msg)
-    mgr.run()
-    gr.join()
+    # rds = redis.StrictRedis(host='localhost', port=6379, db=0)
+    w = worker.Worker('worker1', 'spec/siren.cfg', size=2)
+    w.run()
 
 if __name__ == '__main__': main()
