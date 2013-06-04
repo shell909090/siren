@@ -11,10 +11,10 @@ def list(queue, args):
     print queue.tubes()
 
 def stats(queue, args):
-    pprint.pprint(queue.stats())
-
-def tube(queue, args):
-    pprint.pprint(queue.stats_tube())
+    name = optdict.get('-q')
+    if name is not None:
+        pprint.pprint(queue.stats_tube(name))
+    else: pprint.pprint(queue.stats())
 
 def add(queue, args):
     for url in args:
@@ -30,7 +30,7 @@ def drop(queue, args):
             if job is None: break
             job.delete()
 
-cmds=['list', 'stats', 'tube', 'add', 'drop']
+cmds=['list', 'stats', 'add', 'drop']
 def main():
     '''
     -h: help
@@ -38,6 +38,7 @@ def main():
     -p: port
     -q: queue
     '''
+    global optdict
     optlist, args = getopt.getopt(sys.argv[1:], 'hH:p:q:')
     optdict = dict(optlist)
     if '-h' in optdict:
@@ -46,10 +47,12 @@ def main():
 
     host = optdict.get('-H', 'localhost')
     port = optdict.get('-p', '11300')
-    name = optdict.get('-q')
     queue = beanstalkc.Connection(host=host, port=int(port))
-    queue.use(name)
-    queue.watch(name)
+
+    name = optdict.get('-q')
+    if name:
+        queue.use(name)
+        queue.watch(name)
 
     if args[0] not in cmds:
         print main.__doc__
