@@ -60,19 +60,22 @@ def run(args):
     from gevent import monkey
     import worker
     monkey.patch_all()
-    initlog('DEBUG')
-    worker.workgroup(optdict['-q'], args[0])
+    initlog(optdict.get('-l', 'DEBUG'))
+    host = optdict.get('-H', 'localhost')
+    port = optdict.get('-p', '11300')
+    worker.workgroup(optdict['-q'], args[0], host=host, port=port)
 
 cmds=['list', 'stats', 'add', 'drop', 'run']
 def main():
     '''
     -h: help
     -H: hostname
+    -l: log level, DEBUG default
     -p: port
     -q: queue
     '''
     global optdict
-    optlist, args = getopt.getopt(sys.argv[1:], 'hH:p:q:')
+    optlist, args = getopt.getopt(sys.argv[1:], 'hH:l:p:q:')
     optdict = dict(optlist)
     if '-h' in optdict:
         print main.__doc__
