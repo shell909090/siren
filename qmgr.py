@@ -7,30 +7,63 @@
 import os, sys, pprint, getopt
 import beanstalkc
 
+def queue_init(func):
+    host = optdict.get('-H', 'localhost')
+    port = optdict.get('-p', '11300')
+    queue = beanstalkc.Connection(host=host, port=int(port))
+    return lambda args: func(queue, args)
+
+@queue_init
 def list(queue, args):
     print queue.tubes()
 
+@queue_init
 def stats(queue, args):
     name = optdict.get('-q')
     if name is not None:
         pprint.pprint(queue.stats_tube(name))
     else: pprint.pprint(queue.stats())
 
+@queue_init
 def add(queue, args):
+    name = optdict.get('-q')
+    if name: queue.use(name)
     for url in args:
         queue.put(url)
         print 'put:', url
 
-def drop(queue, args):
-    for name in args:
+@queue_init
+def drop(args):
+    def inner(name):
         queue.use(name)
         queue.watch(name)
         while True:
             job = queue.reserve(timeout=1)
             if job is None: break
             job.delete()
+    if '-q' in optdict: inner(optdict['-q'])
+    else:
+        for name in args: inner(name)
 
-cmds=['list', 'stats', 'add', 'drop']
+def initlog(lv, logfile=None):
+    rootlog = logging.getLogger()
+    if logfile: handler = logging.FileHandler(logfile)
+    else: handler = logging.StreamHandler()
+    handler.setFormatter(
+        logging.Formatter(
+            '%(asctime)s,%(msecs)03d %(name)s[%(levelname)s]: %(message)s',
+            '%H:%M:%S'))
+    rootlog.addHandler(handler)
+    rootlog.setLevel(getattr(logging, lv))
+
+def run(args):
+    from gevent import monkey
+    import worker
+    monkey.patch_all()
+    initlog('DEBUG')
+    worker.workgroup(optdict['-q'], args[0])
+
+cmds=['list', 'stats', 'add', 'drop', 'run']
 def main():
     '''
     -h: help
@@ -44,15 +77,6 @@ def main():
     if '-h' in optdict:
         print main.__doc__
         return
-
-    host = optdict.get('-H', 'localhost')
-    port = optdict.get('-p', '11300')
-    queue = beanstalkc.Connection(host=host, port=int(port))
-
-    name = optdict.get('-q')
-    if name:
-        queue.use(name)
-        queue.watch(name)
 
     if args[0] not in cmds:
         print main.__doc__
