@@ -1,0 +1,20 @@
+name: wenku8
+start: http://www.wenku8.cn/novel/1/1016/index.htm
+result: novel:result
+patterns:
+  - name: table of content
+    match: http://www.wenku8.cn/novel/[0-9]/[0-9]+/index.htm
+    links:
+      - css: a
+        attr: href
+        rebase: yes
+        is: http://www.wenku8.cn/novel/[0-9]/[0-9]+/[0-9]+\.htm
+  - name: node
+    match: http://www.wenku8.cn/novel/[0-9]/[0-9]+/[0-9]+\.htm
+    result:
+      title:
+        css: div#title
+        text: yes
+      content:
+        css: div#content
+        html2text: yes

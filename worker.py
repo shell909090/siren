@@ -4,31 +4,31 @@
 @date: 2013-06-02
 @author: shell.xu
 '''
-import logging
-import beanstalkc
+import time, logging
+import gevent.queue, beanstalkc
 
 logger = logging.getLogger('worker')
 
 class Worker(object):
+    queue = gevent.queue.JoinableQueue()
 
     def __init__(self, app):
-        self.queue = []
         self.app = app
 
     def run(self):
-        while True:
-            req = self.queue.pop(0)
+        while not self.queue.empty():
+            req = self.queue.get()
             if req is None: return
             logger.debug('get: ' + req)
             self.app(self, req)
-            job.delete()
+            self.queue.task_done()
+            # time.sleep(2)
 
     def request(self, url, headers=None, body=None, method='GET'):
-        self.queue.append(url)
+        self.queue.put(url)
         logger.debug('put: ' + str(url))
 
-    def result(self, req, rslt):
-        pass
+    def result(self, req, rslt): self.app.result(req, rslt)
 
 class BeanstalkWorker(object):
 

@@ -4,11 +4,14 @@
 @date: 2013-06-05
 @author: shell.xu
 '''
-import re, sys, pprint
+import re, sys, pprint, logging
 from os import path
-import yaml, requests
+import yaml, chardet, requests
 from lxml import html
 from lxml.cssselect import CSSSelector
+from urlparse import urljoin
+
+logger = logging.getLogger('application')
 
 class ParseError(StandardError): pass
 
@@ -21,15 +24,26 @@ def httpwrap(func):
 def lxmlwrap(func):
     def inner(worker, req, m):
         resp = requests.get(req)
+        resp.encoding = chardet.detect(resp.content)['encoding']
         resp = html.fromstring(resp.text)
         return func(worker, req, resp, m)
     return inner
+
+def rebase(req, i):
+    if i.startswith('http'): return i
+    return urljoin(req, i)
+
+def html2text(h):
+    fi, fo = os.popen2('html2text -utf8')
+    fi.write(h.decode('gbk'))
+    fi.close()
+    return fo.read()
 
 class Application(object):
 
     def __init__(self, filepath, inherit=None):
         self.bases, self.matches = [], []
-        self.cfgdir = path.dirname(self.cfgpath)
+        self.cfgdir = path.dirname(filepath)
         with open(filepath) as fi: self.cfg = yaml.load(fi.read())
         if inherit:
             c = inherit.copy()
@@ -43,10 +57,13 @@ class Application(object):
             else: raise ParseError('unknown patterns')
         del self.cfg['patterns']
 
-        pprint.pprint(self.cfg)
-        pprint.pprint(self.bases)
-        pprint.pprint(self.matches)
-        print ''
+        if 'after' in self.cfg:
+            self.cfg['after'] = self.loadfunc(self.cfg['after'])
+        if 'result' in self.cfg:
+            self.result = self.loadfunc(self.cfg['result'])
+
+    def result(self, req, result):
+        print req, result
 
     def __call__(self, worker, req, m=None):
         for b, f in self.bases:
@@ -64,7 +81,7 @@ class Application(object):
             def func(worker, req, m): worker.request(p['redirect'])
             return func
         if 'result' in p or 'links' in p:
-            return lxmlwrap(self.predef_main(p.get('result'), p.get('links')))
+            return lxmlwrap(self.predef_main(p))
         if 'lxml' in p: return lxmlwrap(self.loadfunc(p['lxml']))
         if 'download' in p: return httpwrap(self.predef_download(p['download']))
         if 'http' in p: return httpwrap(self.loadfunc(p['http']))
@@ -81,30 +98,53 @@ class Application(object):
                 with open(filepath, 'wb') as fo: fo.write(resp)
         return download
 
-    def predef_main(self, result, links):
+    def predef_main(self, p):
+        result, links = p.get('result'), p.get('links')
         if links: links = map(self.loadparser, links)
         if result:
             result = [(k, self.loadparser(v)) for k, v in result.iteritems()]
         def inner(worker, req, resp, m):
             if links:
                 for f in links:
-                    for l in f(worker, req, resp, m):
-                        worker.request(l)
+                    for l in f(worker, req, resp, m): worker.request(l)
             if result:
-                worker.result(req, dict((k, v(worker, req, resp, m))
-                                        for k, v in result))
+                r = dict((k, list(v(worker, req, resp, m))) for k, v in result)
+                if 'after' in self.cfg: r = self.cfg['after'](r)
+                if r: worker.result(req, r)
         return inner
 
     def loadparser(self, p):
         if 'css' in p: sel = CSSSelector(p['css'])
         elif 'xpath' in p: sel = lambda resp: resp.xpath(p['xpath'])
-        before = p.get('before')
-        after = p.get('after')
+
+        if 'attr' not in p and 'text' not in p and 'html' not in p:
+            if 'is' in p: raise ParseError('is not legal without attr or text')
+            if 'isnot' in p: raise ParseError('isnot not legal without attr or text')
+            if 'rebase' in p: raise ParseError('rebase not legal without attr or text')
+        fis = re.compile(p['is']) if 'is' in p else None
+        fisnot = re.compile(p['isnot']) if 'isnot' in p else None
+
+        before, fmap, after = p.get('before'), p.get('map'), p.get('after')
+        if fmap: fmap = self.loadfunc(fmap)
+
         def inner(worker, req, resp, m):
             for i in sel(resp):
                 if before and before(i): continue
+
+                if 'attr' in p: i = i.get(p['attr'])
+                elif 'text' in p: i = unicode(i.text_content())
+                elif 'html' in p: i = html.tostring(i)
+                elif 'html2text' in p: i = html2text(html.tostring(i))
+                if not i: continue
+
+                if 'rebase' in p: i = rebase(req, i)
+                if fis and not fis.match(i): continue
+                if fisnot and fisnot.match(i): continue
+                if fmap: i = fmap(i)
+
                 yield i
-                if after(i): break
+                if after and after(i): break
+
         return inner
 
     def loadfunc(self, name):
@@ -112,11 +152,5 @@ class Application(object):
             modname, funcname = name.split(':')
         else: modname, funcname = None, name
         if not modname: modname = self.cfg['file']
+        if self.cfgdir not in sys.path: sys.path.append(self.cfgdir)
         return getattr(__import__(modname), funcname)
-
-def main():
-    sys.path.append(path.dirname(sys.argv[1]))
-    app = Application(sys.argv[1])
-    sys.path.pop(-1)
-
-if __name__ == '__main__': main()

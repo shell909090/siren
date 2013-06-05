@@ -1,4 +1,5 @@
 name: shell909090
+start: http://shell909090.com/blog/
 patterns:
   - base: http://shell909090.com/blog
     handler: wordpress.yaml

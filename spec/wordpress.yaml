@@ -9,5 +9,7 @@ patterns:
     result:
       title:
         css: h1.entry-title
+        text: yes
       content:
         css: div.entry-content
+        html2text: yes

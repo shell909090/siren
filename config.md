@@ -3,8 +3,7 @@
 * file: 用于下面加载python function用。
 * download: 指名下载的下载函数。
 * downdir: 未指名下载函数时以文件名下载到该目录，注意，同名互相覆盖。
-* before:
-* after:
+* result: put result to object
 
 # patterns #
 
@@ -38,6 +37,14 @@
 * cssone: css选择器，选择第一个命中。
 * xpath: 一个xpath选择器，选中一组内容。
 * xpathone: xpath选择器，选择第一个命中。
-* filter: 过滤选中的内容。# 未启用
+* attr: get attr from node.
+* text: get text from node.
+* html: get html source fron node.
+* is: re which hit.
+* isnot: re which not hit.
+* rebase: rebase path.
 * before: 在执行前调用特定python函数，返回True跳过当前对象。
 * after: 在执行后调用特定python函数，返回True退出循环。
+* map: map source to target
+
+is and isnot only can be used in attr, text or html.
