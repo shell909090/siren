@@ -1,0 +1,4 @@
+name: shell909090
+patterns:
+  - base: http://shell909090.com/blog
+    handler: wordpress.yaml

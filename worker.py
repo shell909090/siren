@@ -14,12 +14,12 @@ logger = logging.getLogger('worker')
 
 class Worker(object):
 
-    def __init__(self, name, cfgs, host='localhost', port=11300):
+    def __init__(self, name, cfg, host='localhost', port=11300):
         self.queue = beanstalkc.Connection(host=host, port=port)
         self.queue.watch(name)
         self.queue.use(name)
         self.name = name
-        self.cfgs = cfgs
+        self.cfg = cfg
 
     def run(self):
         while True:
@@ -28,17 +28,23 @@ class Worker(object):
 
             req = job.body
             logger.debug('get: ' + req)
-            for m, n, p in dispatch(self.cfgs, req):
-                logger.info('%s run.' % p['handler'])
-                if m is None: m = []
-                rslt = p['function'](self, req, *m)
-                # howto process rslt
-                logger.info('result: %s' % str(rslt))
+
+            self.cfg(self, req)
+
+            # for m, n, p in dispatch(self.cfgs, req):
+            #     logger.info('%s run.' % p['handler'])
+            #     if m is None: m = []
+            #     rslt = p['function'](self, req, *m)
+            #     # howto process rslt
+            #     logger.info('result: %s' % str(rslt))
             job.delete()
 
     def request(self, url, headers=None, body=None, method='GET'):
         self.queue.put(url)
         logger.debug('put: ' + str(url))
+
+    def result(self, req, rslt):
+        pass
 
 def workgroup(name, funcfile, size=100, host='localhost', port=11300):
     cfgs = loadcfg(funcfile)
@@ -49,7 +55,13 @@ def workgroup(name, funcfile, size=100, host='localhost', port=11300):
 def load_handler(handler):
     cfgfile = handler['handler']
     with open(cfgfile) as fi: cfg = yaml.load(fi.read())
-    for p in cfg['patterns']:
+    patterns = cfg['patterns']
+    del cfg['patterns']
+    
+    for p in patterns:
+        if 'redirect' in p:
+            lambda 
+            p['redirect']
         
 
 def loadcfg(cfgfile):
