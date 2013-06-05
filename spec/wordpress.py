@@ -24,12 +24,3 @@ def sitemap(worker, req, resp, m):
         print loc.text
         if loc.text[len(base):] == '/': continue
         worker.request(loc.text)
-
-titlesel = CSSSelector('h1.entry-title')
-contentsel = CSSSelector('div.entry-content')
-def article(worker, req, doc, m):
-    for i in titlesel(doc):
-        print i.text
-    for i in contentsel(doc):
-        print clean.word_break_html(html.tostring(i))
-        # print html.tostring(i)

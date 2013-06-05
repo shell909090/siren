@@ -4,7 +4,7 @@
 @date: 2013-06-02
 @author: shell.xu
 '''
-import os, sys, pprint, getopt
+import sys, pprint, getopt
 import beanstalkc
 
 def queue_init(func):
@@ -57,15 +57,33 @@ def initlog(lv, logfile=None):
     rootlog.setLevel(getattr(logging, lv))
 
 def run(args):
-    from gevent import monkey
-    import worker
-    monkey.patch_all()
+    import gevent, gevent.pool, gevent.monkey
+    import app, worker
+    gevent.monkey.patch_all()
     initlog(optdict.get('-l', 'DEBUG'))
-    host = optdict.get('-H', 'localhost')
-    port = optdict.get('-p', '11300')
-    worker.workgroup(optdict['-q'], args[0], host=host, port=port)
 
-cmds=['list', 'stats', 'add', 'drop', 'run']
+    app = apps.Application(args[0])
+    size = int(optdict.get('-s', '10'))
+    pool = gevent.pool.Pool(size)
+    for n in xrange(size): pool.spawn(worker.Worker(app).run)
+    pool.join()
+
+def worker(args):
+    import gevent, gevent.pool, gevent.monkey
+    import apps, worker
+    gevent.monkey.patch_all()
+    initlog(optdict.get('-l', 'DEBUG'))
+
+    app = apps.Application(args[0])
+    size = int(optdict.get('-s', '10'))
+    pool = gevent.pool.Pool(size)
+    for n in xrange(size):
+        pool.spawn(worker.BeanstalkWorker(
+                app, optdict['-q'], optdict.get('-H', 'localhost'),
+                optdict.get('-p', '11300'), int(optdict.get('-t', '10'))).run)
+    pool.join()
+
+cmds=['list', 'stats', 'add', 'drop', 'run', 'worker']
 def main():
     '''
     -h: help
@@ -73,17 +91,15 @@ def main():
     -l: log level, DEBUG default
     -p: port
     -q: queue
+    -s: queue size, 10 default
+    -t: timeout
     '''
     global optdict
-    optlist, args = getopt.getopt(sys.argv[1:], 'hH:l:p:q:')
+    optlist, args = getopt.getopt(sys.argv[1:], 'hH:l:p:q:s:t:')
     optdict = dict(optlist)
-    if '-h' in optdict:
+    if '-h' in optdict or args[0] not in cmds:
         print main.__doc__
         return
-
-    if args[0] not in cmds:
-        print main.__doc__
-        return
-    else: globals()[args[0]](queue, args[1:])
+    globals()[args[0]](queue, args[1:])
 
 if __name__ == '__main__': main()

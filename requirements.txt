@@ -1,0 +1,4 @@
+python-yaml
+python-requests
+python-lxml
+python-cssselect

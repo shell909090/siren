@@ -1,0 +1,43 @@
+# config #
+
+* file: 用于下面加载python function用。
+* download: 指名下载的下载函数。
+* downdir: 未指名下载函数时以文件名下载到该目录，注意，同名互相覆盖。
+* before:
+* after:
+
+# patterns #
+
+模式匹配有两种模式，base和match。base比match优先。
+
+* base: 使用startswith工作，速度较快。一般用于大型网站的分割组合，复杂度隔离。
+* match: 使用正则表达式工作，速度较慢。
+
+# function #
+
+在python代码中可以按名称调用。
+
+# python function #
+
+指定一个python函数时，可以用`file:function_name`的格式指定。或者只指名function_name，file在config中指定。
+
+# action #
+
+* yaml: 指定另一个yaml处理。
+* redirect: 自动抓取另一个url，而不抓当前url。
+* url: 将url直接传递给后面所指定的python函数，没有下载行为。用户可以自行选择下载方式。
+* http: 使用request下载内容，然后调用后面所指定的python函数。并且将结果一并传递。
+* download: 将url下载，使用指定函数处理。如果指定函数为空，使用config中的download函数进行存储。
+* lxml: 使用request下载内容，使用lxml.html解析，然后调用后面所指定的python函数。并且将结果一并传递。
+* result: 使用request下载内容，使用lxml.html解析。而后使用parsers进行逐项解析。这个项目的值应该是一个dict。
+* links: 使用request下载内容，使用lxml.html解析。而后使用parsers进行逐项解析。这个项目的值应该是一个list。
+
+# parsers #
+
+* css: 一个css选择器，选中一组内容。
+* cssone: css选择器，选择第一个命中。
+* xpath: 一个xpath选择器，选中一组内容。
+* xpathone: xpath选择器，选择第一个命中。
+* filter: 过滤选中的内容。# 未启用
+* before: 在执行前调用特定python函数，返回True跳过当前对象。
+* after: 在执行后调用特定python函数，返回True退出循环。
