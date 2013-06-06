@@ -11,6 +11,8 @@ from lxml import html
 from lxml.cssselect import CSSSelector
 from urlparse import urljoin
 
+import html_parser
+
 logger = logging.getLogger('application')
 
 class ParseError(StandardError): pass
@@ -29,15 +31,15 @@ def lxmlwrap(func):
         return func(worker, req, resp, m)
     return inner
 
-def rebase(req, i):
+def absolute_url(url, i):
     if i.startswith('http'): return i
-    return urljoin(req, i)
+    return urljoin(url, i)
 
-def html2text(h):
-    fi, fo = os.popen2('html2text -utf8')
-    fi.write(h.decode('gbk'))
-    fi.close()
-    return fo.read()
+def parser_map(app, cfg):
+    keys = set(cfg.keys())
+    l = [html_parser.LxmlParser,]
+    for i in l:
+        if i.keyset & keys: return i(app, cfg)
 
 class Application(object):
 
@@ -52,8 +54,8 @@ class Application(object):
 
         for p in self.cfg['patterns']:
             func = self.loadaction(p)
-            if 'base' in p: self.bases.append((p['base'], func))
-            elif 'match' in p: self.matches.append((re.compile(p['match']), func))
+            if 'base' in p: self.bases.append((p['base'], func, p))
+            elif 'match' in p: self.matches.append((re.compile(p['match']), func, p))
             else: raise ParseError('unknown patterns')
         del self.cfg['patterns']
 
@@ -66,12 +68,14 @@ class Application(object):
         print req, result
 
     def __call__(self, worker, req, m=None):
-        for b, f in self.bases:
+        for b, f, p in self.bases:
             if req.startswith(b):
                 req = req[len(b):]
+                if 'name' in p: logger.debug('%s runed.' % p['name'])
                 return f(worker, req, m)
-        for r, f in self.matches:
+        for r, f, p in self.matches:
             m = r.match(req)
+            if 'name' in p: logger.debug('%s runed.' % p['name'])
             if m: f(worker, req, m)
 
     def loadaction(self, p):
@@ -100,54 +104,22 @@ class Application(object):
 
     def predef_main(self, p):
         result, links = p.get('result'), p.get('links')
-        if links: links = map(self.loadparser, links)
+        if links: links = [parser_map(self, cfg) for cfg in links]
         if result:
-            result = [(k, self.loadparser(v)) for k, v in result.iteritems()]
+            result = [(k, parser_map(self, v)) for k, v in result.iteritems()]
         def inner(worker, req, resp, m):
             if links:
                 for f in links:
-                    for l in f(worker, req, resp, m): worker.request(l)
+                    for l in f(worker, req, resp, m):
+                        worker.request(absolute_url(req, l))
             if result:
                 r = dict((k, list(v(worker, req, resp, m))) for k, v in result)
                 if 'after' in self.cfg: r = self.cfg['after'](r)
                 if r: worker.result(req, r)
         return inner
 
-    def loadparser(self, p):
-        if 'css' in p: sel = CSSSelector(p['css'])
-        elif 'xpath' in p: sel = lambda resp: resp.xpath(p['xpath'])
-
-        if 'attr' not in p and 'text' not in p and 'html' not in p:
-            if 'is' in p: raise ParseError('is not legal without attr or text')
-            if 'isnot' in p: raise ParseError('isnot not legal without attr or text')
-            if 'rebase' in p: raise ParseError('rebase not legal without attr or text')
-        fis = re.compile(p['is']) if 'is' in p else None
-        fisnot = re.compile(p['isnot']) if 'isnot' in p else None
-
-        before, fmap, after = p.get('before'), p.get('map'), p.get('after')
-        if fmap: fmap = self.loadfunc(fmap)
-
-        def inner(worker, req, resp, m):
-            for i in sel(resp):
-                if before and before(i): continue
-
-                if 'attr' in p: i = i.get(p['attr'])
-                elif 'text' in p: i = unicode(i.text_content())
-                elif 'html' in p: i = html.tostring(i)
-                elif 'html2text' in p: i = html2text(html.tostring(i))
-                if not i: continue
-
-                if 'rebase' in p: i = rebase(req, i)
-                if fis and not fis.match(i): continue
-                if fisnot and fisnot.match(i): continue
-                if fmap: i = fmap(i)
-
-                yield i
-                if after and after(i): break
-
-        return inner
-
     def loadfunc(self, name):
+        if name is None: return None
         if ':' in name:
             modname, funcname = name.split(':')
         else: modname, funcname = None, name
