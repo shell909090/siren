@@ -6,40 +6,41 @@
 '''
 import re, sys, pprint, logging
 from os import path
-import yaml, chardet, requests
+import yaml, chardet
 from lxml import html
-from lxml.cssselect import CSSSelector
 from urlparse import urljoin
-
-import html_parser
 
 logger = logging.getLogger('application')
 
 class ParseError(StandardError): pass
 
-def httpwrap(func):
-    def inner(worker, req, m):
-        resp = requests.get(req)
-        return func(worker, req, resp, m)
-    return inner
+from httputils import httpwrap
 
-def lxmlwrap(func):
-    def inner(worker, req, m):
-        resp = requests.get(req)
+def lxmlwrap(*funcs):
+    def inner(worker, req, resp, m):
         resp.encoding = chardet.detect(resp.content)['encoding']
         resp = html.fromstring(resp.text)
-        return func(worker, req, resp, m)
-    return inner
+        for func in funcs: func(worker, req, resp, m)
+    return httpwrap(inner)
 
 def absolute_url(url, i):
     if i.startswith('http'): return i
     return urljoin(url, i)
 
+import html_parser, filters
 def parser_map(app, cfg):
     keys = set(cfg.keys())
-    l = [html_parser.LxmlParser,]
-    for i in l:
-        if i.keyset & keys: return i(app, cfg)
+    ps = [html_parser.LxmlParser,]
+    fs = [filters.TxtFilter,]
+    p = None
+    for pcls in ps:
+        if pcls.keyset & keys:
+            p = pcls(cfg)
+            break
+    if p is None: raise ParseError('no parser match for config: %s' % str(cfg))
+    for fcls in fs:
+        if fcls.keyset & keys: p = fcls(app, cfg, p)
+    return p
 
 class Application(object):
 
@@ -69,12 +70,12 @@ class Application(object):
 
     def __call__(self, worker, req, m=None):
         for b, f, p in self.bases:
-            if req.startswith(b):
-                req = req[len(b):]
+            if req.url.startswith(b):
+                req.url = req.url[len(b):]
                 if 'name' in p: logger.debug('%s runed.' % p['name'])
                 return f(worker, req, m)
         for r, f, p in self.matches:
-            m = r.match(req)
+            m = r.match(req.url)
             if 'name' in p: logger.debug('%s runed.' % p['name'])
             if m: f(worker, req, m)
 
@@ -84,11 +85,21 @@ class Application(object):
         if 'redirect' in p:
             def func(worker, req, m): worker.request(p['redirect'])
             return func
-        if 'result' in p or 'links' in p:
-            return lxmlwrap(self.predef_main(p))
-        if 'lxml' in p: return lxmlwrap(self.loadfunc(p['lxml']))
-        if 'download' in p: return httpwrap(self.predef_download(p['download']))
-        if 'http' in p: return httpwrap(self.loadfunc(p['http']))
+        lfuncs = set(('links', 'result', 'lxml')) & set(p.keys())
+        if lfuncs:
+            l = []
+            for key in lfuncs:
+                if key == 'links': l.append(self.predef_links(p))
+                elif key == 'result': l.append(self.predef_result(p))
+                elif key == 'lxml': l.append(self.loadfunc(p['lxml']))
+            return lxmlwrap(*l)
+        lfuncs = set(('download', 'http')) & set(p.keys())
+        if lfuncs:
+            l = []
+            for key in lfuncs:
+                if key == 'download': l.append(self.predef_download(p['download']))
+                elif key == 'http': l.append(self.loadfunc(p['http']))
+            return httpwrap(*l)
         if 'url' in p: return self.loadfunc(p['url'])
         raise ParseError('no handler for match')
 
@@ -98,24 +109,25 @@ class Application(object):
         else:
             downdir = self.cfg['downdir']
             def download(worker, req, resp, m):
-                filepath = path.join(downdir, path.basename(req))
+                filepath = path.join(downdir, path.basename(req.url))
                 with open(filepath, 'wb') as fo: fo.write(resp)
         return download
 
-    def predef_main(self, p):
-        result, links = p.get('result'), p.get('links')
-        if links: links = [parser_map(self, cfg) for cfg in links]
-        if result:
-            result = [(k, parser_map(self, v)) for k, v in result.iteritems()]
+    def predef_links(self, p):
+        links = [parser_map(self, cfg) for cfg in p['links']]
         def inner(worker, req, resp, m):
-            if links:
-                for f in links:
-                    for l in f(worker, req, resp, m):
-                        worker.request(absolute_url(req, l))
-            if result:
-                r = dict((k, list(v(worker, req, resp, m))) for k, v in result)
-                if 'after' in self.cfg: r = self.cfg['after'](r)
-                if r: worker.result(req, r)
+            for parser in links:
+                for l in parser(worker, req, resp, m):
+                    worker.request(absolute_url(req.url, l))
+        return inner
+
+    def predef_result(self, p):
+        result = [(k, parser_map(self, v)) for k, v in p['result'].iteritems()]
+        def inner(worker, req, resp, m):
+            r = dict((k, list(parser(worker, req, resp, m)))
+                     for k, parser in result)
+            if 'after' in self.cfg: r = self.cfg['after'](r)
+            if r: worker.result(req, r)
         return inner
 
     def loadfunc(self, name):

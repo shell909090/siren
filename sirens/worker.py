@@ -6,6 +6,7 @@
 '''
 import time, logging
 import gevent.queue, beanstalkc
+import httputils
 
 logger = logging.getLogger('worker')
 
@@ -17,15 +18,17 @@ class Worker(object):
 
     def run(self):
         while not self.queue.empty():
-            req = self.queue.get()
-            if req is None: return
-            logger.debug('get: ' + req)
+            reqsrc = self.queue.get()
+            if reqsrc is None: return
+            req = ReqInfo.unpack(reqsrc)
+            logger.debug('get: ' + req.url)
             self.app(self, req)
             self.queue.task_done()
             # time.sleep(2)
 
     def request(self, url, headers=None, body=None, method='GET'):
-        self.queue.put(url)
+        req = httputils.ReqInfo(url, headers, body, method)
+        self.queue.put(req.pack())
         logger.debug('put: ' + str(url))
 
     def result(self, req, rslt): self.app.result(req, rslt)
@@ -42,11 +45,12 @@ class BeanstalkWorker(object):
         while True:
             job = self.queue.reserve(timeout=self.timeout)
             if job is None: return
-            req = job.body
+            req = ReqInfo.unpack(job.body)
             logger.debug('get: ' + req)
             self.app(self, req)
             job.delete()
 
     def request(self, url, headers=None, body=None, method='GET'):
+        req = httputils.ReqInfo(url, headers, body, method)
         self.queue.put(url)
         logger.debug('put: ' + str(url))
