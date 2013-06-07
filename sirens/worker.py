@@ -20,16 +20,18 @@ class Worker(object):
         while not self.queue.empty():
             reqsrc = self.queue.get()
             if reqsrc is None: return
-            req = ReqInfo.unpack(reqsrc)
+            req = httputils.ReqInfo.unpack(reqsrc)
             logger.debug('get: ' + req.url)
             self.app(self, req)
             self.queue.task_done()
             # time.sleep(2)
 
-    def request(self, url, headers=None, body=None, method='GET'):
-        req = httputils.ReqInfo(url, headers, body, method)
+    def append(self, req):
         self.queue.put(req.pack())
-        logger.debug('put: ' + str(url))
+        logger.debug('put: ' + str(req.url))
+
+    def request(self, url, headers=None, body=None, method='GET', callto=None):
+        self.append(httputils.ReqInfo(url, headers, body, method, callto))
 
     def result(self, req, rslt): self.app.result(req, rslt)
 
@@ -50,7 +52,9 @@ class BeanstalkWorker(object):
             self.app(self, req)
             job.delete()
 
-    def request(self, url, headers=None, body=None, method='GET'):
-        req = httputils.ReqInfo(url, headers, body, method)
-        self.queue.put(url)
-        logger.debug('put: ' + str(url))
+    def append(self, req):
+        self.queue.put(req.pack())
+        logger.debug('put: ' + str(req.url))
+
+    def request(self, url, headers=None, body=None, method='GET', callto=None):
+        self.append(httputils.ReqInfo(url, headers, body, method, callto))

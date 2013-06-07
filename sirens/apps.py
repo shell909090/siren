@@ -8,7 +8,6 @@ import re, sys, pprint, logging
 from os import path
 import yaml, chardet
 from lxml import html
-from urlparse import urljoin
 
 logger = logging.getLogger('application')
 
@@ -23,12 +22,8 @@ def lxmlwrap(*funcs):
         for func in funcs: func(worker, req, resp, m)
     return httpwrap(inner)
 
-def absolute_url(url, i):
-    if i.startswith('http'): return i
-    return urljoin(url, i)
-
 import html_parser, filters
-def parser_map(app, cfg):
+def parser_map(app, cfg, link=False):
     keys = set(cfg.keys())
     ps = [html_parser.LxmlParser,]
     fs = [filters.TxtFilter,]
@@ -40,6 +35,7 @@ def parser_map(app, cfg):
     if p is None: raise ParseError('no parser match for config: %s' % str(cfg))
     for fcls in fs:
         if fcls.keyset & keys: p = fcls(app, cfg, p)
+    if link: p = filters.LinkFilter(app, cfg, p)
     return p
 
 class Application(object):
@@ -47,6 +43,7 @@ class Application(object):
     def __init__(self, filepath, inherit=None):
         self.bases, self.matches = [], []
         self.cfgdir = path.dirname(filepath)
+        self.rules = {}
         with open(filepath) as fi: self.cfg = yaml.load(fi.read())
         if inherit:
             c = inherit.copy()
@@ -55,9 +52,10 @@ class Application(object):
 
         for p in self.cfg['patterns']:
             func = self.loadaction(p)
+            if 'id' in p: self.rules[p['id']] = func
             if 'base' in p: self.bases.append((p['base'], func, p))
             elif 'match' in p: self.matches.append((re.compile(p['match']), func, p))
-            else: raise ParseError('unknown patterns')
+            elif 'id' not in p: raise ParseError('unknown patterns')
         del self.cfg['patterns']
 
         if 'after' in self.cfg:
@@ -69,14 +67,18 @@ class Application(object):
         print req, result
 
     def __call__(self, worker, req, m=None):
+        if req.callto is not None:
+            if req.callto not in self.rules:
+                raise Exception('callto function %s not exist in rules.' % req.callto)
+            self.rules[req.callto](worker, req, m)
         for b, f, p in self.bases:
             if req.url.startswith(b):
                 req.url = req.url[len(b):]
-                if 'name' in p: logger.debug('%s runed.' % p['name'])
+                if 'name' in p: logger.debug('function "%s" runed.' % p['name'])
                 return f(worker, req, m)
         for r, f, p in self.matches:
             m = r.match(req.url)
-            if 'name' in p: logger.debug('%s runed.' % p['name'])
+            if 'name' in p: logger.debug('function "%s" runed.' % p['name'])
             if m: f(worker, req, m)
 
     def loadaction(self, p):
@@ -114,17 +116,18 @@ class Application(object):
         return download
 
     def predef_links(self, p):
-        links = [parser_map(self, cfg) for cfg in p['links']]
+        links = [parser_map(self, cfg, True)
+                 for cfg in p['links']]
         def inner(worker, req, resp, m):
             for parser in links:
-                for l in parser(worker, req, resp, m):
-                    worker.request(absolute_url(req.url, l))
+                for req in parser(req, resp, m): worker.append(req)
         return inner
 
     def predef_result(self, p):
-        result = [(k, parser_map(self, v)) for k, v in p['result'].iteritems()]
+        result = [(k, parser_map(self, v, False))
+                  for k, v in p['result'].iteritems()]
         def inner(worker, req, resp, m):
-            r = dict((k, list(parser(worker, req, resp, m)))
+            r = dict((k, list(parser(req, resp, m)))
                      for k, parser in result)
             if 'after' in self.cfg: r = self.cfg['after'](r)
             if r: worker.result(req, r)

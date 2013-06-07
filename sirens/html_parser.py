@@ -4,7 +4,7 @@
 @date: 2013-06-06
 @author: shell.xu
 '''
-import re, os, logging, itertools
+import os, logging
 from lxml import html
 from lxml.cssselect import CSSSelector
 
@@ -35,7 +35,7 @@ class LxmlParser(object):
         return inner
 
     def __call__(self, req, resp, m):
-        for node in self.src(req, resp, m):
+        for node in self.src(resp):
             s = self.tostr(node)
             if not s: continue
             yield s
@@ -43,11 +43,11 @@ class LxmlParser(object):
 @LxmlParser.register('sources')
 def css(p):
     sel = CSSSelector(p)
-    return lambda req, resp, m: sel(resp)
+    return lambda resp: sel(resp)
 
 @LxmlParser.register('sources')
 def xpath(p):
-    return lambda req, resp, m: resp.xpath(p)
+    return lambda resp: resp.xpath(p)
 
 @LxmlParser.register('tostrs')
 def attr(p):
@@ -61,6 +61,7 @@ def text(p):
 def fhtml(p):
     return lambda node: html.tostring(node)
 
+# TODO: use python not exe
 @LxmlParser.register('tostrs')
 def html2text(p):
     def inner(node):

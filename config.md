@@ -7,8 +7,9 @@
 
 # patterns #
 
-模式匹配有两种模式，base和match。base比match优先。
+模式匹配有3种模式，base和match。base比match优先。
 
+* id: callto id
 * base: 使用startswith工作，速度较快。一般用于大型网站的分割组合，复杂度隔离。
 * match: 使用正则表达式工作，速度较慢。
 
@@ -24,12 +25,12 @@
 
 * yaml: 指定另一个yaml处理。
 * redirect: 自动抓取另一个url，而不抓当前url。
-* url: 将url直接传递给后面所指定的python函数，没有下载行为。用户可以自行选择下载方式。
-* http: 使用request下载内容，然后调用后面所指定的python函数。并且将结果一并传递。
-* download: 将url下载，使用指定函数处理。如果指定函数为空，使用config中的download函数进行存储。
-* lxml: 使用request下载内容，使用lxml.html解析，然后调用后面所指定的python函数。并且将结果一并传递。
-* result: 使用request下载内容，使用lxml.html解析。而后使用parsers进行逐项解析。这个项目的值应该是一个dict。
 * links: 使用request下载内容，使用lxml.html解析。而后使用parsers进行逐项解析。这个项目的值应该是一个list。
+* result: 使用request下载内容，使用lxml.html解析。而后使用parsers进行逐项解析。这个项目的值应该是一个dict。
+* lxml: 使用request下载内容，使用lxml.html解析，然后调用后面所指定的python函数。并且将结果一并传递。
+* download: 将url下载，使用指定函数处理。如果指定函数为空，使用config中的download函数进行存储。
+* http: 使用request下载内容，然后调用后面所指定的python函数。并且将结果一并传递。
+* url: 将url直接传递给后面所指定的python函数，没有下载行为。用户可以自行选择下载方式。
 
 # html parser #
 
@@ -38,11 +39,16 @@
 * attr: get attr from node.
 * text: get text from node.
 * html: get html source fron node.
+* html2text: render html 2 text.
 
-# filter #
+# txt filter #
 
 * is: re which hit.
 * isnot: re which not hit.
 * before: 在执行前调用特定python函数，返回True跳过当前对象。
 * after: 在执行后调用特定python函数，返回True退出循环。
 * map: map source to target
+
+# link filter #
+
+* callto: send link to the parser which id in callto

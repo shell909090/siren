@@ -6,6 +6,8 @@
 '''
 import sys, pprint, getopt, logging
 import beanstalkc
+import gevent, gevent.pool, gevent.monkey
+import sirens
 
 optlist, args = getopt.getopt(sys.argv[1:], 'hH:l:p:q:s:t:')
 optdict = dict(optlist)
@@ -32,7 +34,7 @@ def add(queue, args):
     name = optdict.get('-q')
     if name: queue.use(name)
     for url in args:
-        queue.put(url)
+        queue.put(sirens.ReqInfo(url, None, None, 'GET').pack())
         print 'put:', url
 
 @queue_init
@@ -60,21 +62,18 @@ def initlog(lv, logfile=None):
     rootlog.setLevel(getattr(logging, lv))
 
 def run(args):
-    import gevent, gevent.pool, gevent.monkey
-    import sirens
     gevent.monkey.patch_all()
     initlog(optdict.get('-l', 'DEBUG'))
 
     app = sirens.Application(args[0])
-    sirens.Worker.queue.put(app.cfg['start'] if len(args) < 2 else args[1])
+    url = app.cfg['start'] if len(args) < 2 else args[1]
+    sirens.Worker.queue.put(sirens.ReqInfo(url, None, None, 'GET').pack())
     size = int(optdict.get('-s', '1'))
     pool = gevent.pool.Pool(size)
     for n in xrange(size): pool.spawn(sirens.Worker(app).run)
     pool.join()
 
 def worker(args):
-    import gevent, gevent.pool, gevent.monkey
-    import sirens
     gevent.monkey.patch_all()
     initlog(optdict.get('-l', 'DEBUG'))
 

@@ -6,10 +6,10 @@ patterns:
     links:
       - css: a
         attr: href
-        rebase: yes
         is: "[0-9]+\\.htm"
-  - name: node
-    match: http://www.wenku8.cn/novel/[0-9]/[0-9]+/[0-9]+\.htm
+        callto: node
+  - id: node
+    name: node
     result:
       title:
         css: div#title
