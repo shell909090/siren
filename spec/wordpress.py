@@ -23,4 +23,4 @@ def sitemap(worker, req, resp, m):
         if not loc.text.startswith(base): continue
         print loc.text
         if loc.text[len(base):] == '/': continue
-        worker.request(loc.text)
+        worker.request(loc.text, callto='blog')

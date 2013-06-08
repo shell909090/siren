@@ -51,4 +51,6 @@
 
 # link filter #
 
-* callto: send link to the parser which id in callto
+* callto: 使用callto指定的id执行该link的解析。
+
+注：如果callto没有使用绝对id，那么系统会自动增加当前文件的id(如果存在)作为前缀。

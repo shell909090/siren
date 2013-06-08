@@ -78,7 +78,7 @@ def worker(args):
     initlog(optdict.get('-l', 'DEBUG'))
 
     app = sirens.Application(args[0])
-    size = int(optdict.get('-s', '10'))
+    size = int(optdict.get('-s', '100'))
     pool = gevent.pool.Pool(size)
     for n in xrange(size):
         pool.spawn(sirens.BeanstalkWorker(

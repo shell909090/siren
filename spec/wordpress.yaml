@@ -5,7 +5,8 @@ patterns:
     redirect: /sitemap.xml.gz
   - match: /sitemap.xml.gz
     file: sitemap
-  - match: /[0-9]*/[0-9]*/.*
+  - id: blog
+    match: /[0-9]*/[0-9]*/.*
     result:
       title:
         css: h1.entry-title

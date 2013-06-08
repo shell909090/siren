@@ -15,6 +15,7 @@ class Worker(object):
 
     def __init__(self, app):
         self.app = app
+        self.result = self.app.result
 
     def run(self):
         while not self.queue.empty():
@@ -33,8 +34,6 @@ class Worker(object):
     def request(self, url, headers=None, body=None, method='GET', callto=None):
         self.append(httputils.ReqInfo(url, headers, body, method, callto))
 
-    def result(self, req, rslt): self.app.result(req, rslt)
-
 class BeanstalkWorker(object):
 
     def __init__(self, app, name, host, port, timeout=1):
@@ -42,6 +41,7 @@ class BeanstalkWorker(object):
         self.queue.watch(name)
         self.queue.use(name)
         self.name, self.app, self.timeout = name, app, timeout
+        self.result = self.app.result
 
     def run(self):
         while True:

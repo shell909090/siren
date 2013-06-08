@@ -13,12 +13,12 @@ class ReqInfo(object):
         self.url, self.headers, self.body, self.method = url, headers, body, method
         self.callto = callto
 
-    def pack(self):
-        return json.dumps((self.url, self.headers, self.body,
-                           self.method, self.callto))
-
     @classmethod
-    def unpack(cls, s): return cls(*json.loads(s))
+    def unpack(cls, s): return cls(**json.loads(s))
+    def pack(self):
+        return json.dumps({'url': self.url, 'headers': self.headers,
+                           'body': self.body, 'method': self.method,
+                           'callto': self.callto})
 
 def httpwrap(*funcs):
     def inner(worker, req, m):

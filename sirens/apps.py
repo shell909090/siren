@@ -68,9 +68,13 @@ class Application(object):
 
     def __call__(self, worker, req, m=None):
         if req.callto is not None:
-            if req.callto not in self.rules:
-                raise Exception('callto function %s not exist in rules.' % req.callto)
-            self.rules[req.callto](worker, req, m)
+            if isinstance(req.callto, basestring):
+                req.callto = req.callto.split('.')
+            cur = None
+            while not cur: cur = req.callto.pop(0)
+            if cur not in self.rules:
+                raise Exception('callto function %s not exist in rules.' % cur)
+            return self.rules[cur](worker, req, m)
         for b, f, p in self.bases:
             if req.url.startswith(b):
                 req.url = req.url[len(b):]
@@ -83,7 +87,8 @@ class Application(object):
 
     def loadaction(self, p):
         if 'yaml' in p:
-            return Application(path.join(self.cfgdir, p['handler']), p)
+            p = p.copy()
+            return Application(path.join(self.cfgdir, p['yaml']), p)
         if 'redirect' in p:
             def func(worker, req, m): worker.request(p['redirect'])
             return func

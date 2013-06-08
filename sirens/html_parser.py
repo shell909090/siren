@@ -10,6 +10,10 @@ from lxml.cssselect import CSSSelector
 
 logger = logging.getLogger('html')
 
+def findset(cfg, d):
+    keys = set(cfg.keys()) & set(d.keys())
+    return [d[key](cfg[key]) for key in keys]
+
 class LxmlParser(object):
     sources = {}
     tostrs = {}
@@ -17,12 +21,8 @@ class LxmlParser(object):
 
     def __init__(self, cfg):
         self.cfg = cfg
-        self.src = self.findset(self.sources)[0]
-        self.tostr = self.findset(self.tostrs)[0]
-
-    def findset(self, d):
-        keys = set(self.cfg.keys()) & set(d.keys())
-        return [d[key](self.cfg[key]) for key in keys]
+        self.src = findset(self.cfg, self.sources)[0]
+        self.tostr = findset(self.cfg, self.tostrs)[0]
 
     @classmethod
     def register(cls, name, funcname=None):
