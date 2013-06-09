@@ -1,0 +1,14 @@
+Source: siren
+Section: python
+Priority: extra
+Maintainer: Shell Xu <shell909090@gmail.com>
+Build-Depends: debhelper (>= 8)
+Standards-Version: 3.9.3
+X-Python-Version: >= 2.6
+Homepage: http://gitcafe.com/shell909090/siren
+
+Package: siren
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: spider framework and utils
+ spider framework and utils written by python
