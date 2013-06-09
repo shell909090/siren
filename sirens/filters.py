@@ -18,7 +18,7 @@ class TxtFilter(object):
 
     def __init__(self, app, cfg, p):
         self.cfg, self.p = cfg, p
-        self.filter = findset(self.cfg, self.filters)
+        self.filter = findset(app, self.cfg, self.filters)
         self.before = app.loadfunc(cfg.get('before'))
         self.after = app.loadfunc(cfg.get('after'))
         self.map = app.loadfunc(cfg.get('map'))
@@ -66,8 +66,8 @@ class LinkFilter(object):
 
     def __init__(self, app, cfg, p):
         self.cfg, self.p = cfg, p
-        # self.ufs = findset(self.cfg, self.urlfilters)
-        self.rfs = findset(self.cfg, self.reqfilters)
+        # self.ufs = findset(app, self.cfg, self.urlfilters)
+        self.rfs = findset(app, self.cfg, self.reqfilters)
 
     @classmethod
     def register(cls, name, funcname=None):
@@ -89,11 +89,8 @@ class LinkFilter(object):
 
 @LinkFilter.register('reqfilters')
 def callto(p, cfg, app):
-    if '.' in p: id = p
-    else:
-        id = app.cfg.get('id')
-        if id is None: id = p
-        else: id += '.' + p
+    if ':' in p: id = p
+    else: id = '%s:%s' % (app.filename, p)
     def inner(req):
         req.callto = id
         return req

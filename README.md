@@ -48,9 +48,11 @@ siren的特殊之处在于，定义了一组预定义的爬虫处理程序。这
 
 # TODO #
 
-* 队列防回环：已经爬过的维护一份列表。
+* sitemap
 * robots.txt解析：支持爬虫协议，限制不允许url和限速。
 * cookie在redis中保存：加速存取效率。
+* http config
+* 队列防回环(in redis)：已经爬过的维护一份列表。
 
 # 授权 #
 

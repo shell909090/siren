@@ -39,11 +39,12 @@ def parser_map(app, cfg, link=False):
     return p
 
 class Application(object):
+    rules = {}
 
     def __init__(self, filepath, inherit=None):
         self.bases, self.matches = [], []
-        self.cfgdir = path.dirname(filepath)
-        self.rules = {}
+        self.basedir, self.filename = path.split(filepath)
+        self.rules.setdefault(self.filename, {})
         with open(filepath) as fi: self.cfg = yaml.load(fi.read())
         if inherit:
             c = inherit.copy()
@@ -52,7 +53,7 @@ class Application(object):
 
         for p in self.cfg['patterns']:
             func = self.loadaction(p)
-            if 'id' in p: self.rules[p['id']] = func
+            if 'id' in p: self.rules[self.filename][p['id']] = func
             if 'base' in p: self.bases.append((p['base'], func, p))
             elif 'match' in p: self.matches.append((re.compile(p['match']), func, p))
             elif 'id' not in p: raise ParseError('unknown patterns')
@@ -68,13 +69,13 @@ class Application(object):
 
     def __call__(self, worker, req, m=None):
         if req.callto is not None:
-            if isinstance(req.callto, basestring):
-                req.callto = req.callto.split('.')
-            cur = None
-            while not cur: cur = req.callto.pop(0)
-            if cur not in self.rules:
+            modname = self.filename
+            if ':' in req.callto:
+                modname, req.callto = req.callto.split(':', 1)
+            func = self.rules[modname].get(req.callto)
+            if func is None:
                 raise Exception('callto function %s not exist in rules.' % cur)
-            return self.rules[cur](worker, req, m)
+            return func(worker, req, m)
         for b, f, p in self.bases:
             if req.url.startswith(b):
                 req.url = req.url[len(b):]
@@ -88,7 +89,7 @@ class Application(object):
     def loadaction(self, p):
         if 'yaml' in p:
             p = p.copy()
-            return Application(path.join(self.cfgdir, p['yaml']), p)
+            return Application(path.join(self.basedir, p['yaml']), p)
         if 'redirect' in p:
             def func(worker, req, m): worker.request(p['redirect'])
             return func
@@ -144,5 +145,5 @@ class Application(object):
             modname, funcname = name.split(':')
         else: modname, funcname = None, name
         if not modname: modname = self.cfg['file']
-        if self.cfgdir not in sys.path: sys.path.append(self.cfgdir)
+        if self.basedir not in sys.path: sys.path.append(self.basedir)
         return getattr(__import__(modname), funcname)

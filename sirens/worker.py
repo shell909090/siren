@@ -11,9 +11,15 @@ import httputils
 logger = logging.getLogger('worker')
 
 class Worker(object):
-    queue = gevent.queue.JoinableQueue()
+
+    def request(self, url, headers=None, body=None, method='GET', callto=None):
+        self.append(httputils.ReqInfo(url, headers, body, method, callto))
+
+class GeventWorker(Worker):
 
     def __init__(self, app):
+        self.queue = gevent.queue.JoinableQueue()
+        self.done = set()
         self.app = app
         self.result = self.app.result
 
@@ -22,20 +28,20 @@ class Worker(object):
             reqsrc = self.queue.get()
             if reqsrc is None: return
             req = httputils.ReqInfo.unpack(reqsrc)
+            if req.url in self.done: continue
+            else: self.done.add(req.url)
             logger.debug('get: ' + req.url)
             self.app(self, req)
             self.queue.task_done()
-            # time.sleep(2)
 
     def append(self, req):
+        if req.url in self.done: return
         self.queue.put(req.pack())
         logger.debug('put: ' + str(req.url))
 
-    def request(self, url, headers=None, body=None, method='GET', callto=None):
-        self.append(httputils.ReqInfo(url, headers, body, method, callto))
+class BeanstalkWorker(Worker):
 
-class BeanstalkWorker(object):
-
+    # put done to redis
     def __init__(self, app, name, host, port, timeout=1):
         self.queue = beanstalkc.Connection(host=host, port=port)
         self.queue.watch(name)
@@ -55,6 +61,3 @@ class BeanstalkWorker(object):
     def append(self, req):
         self.queue.put(req.pack())
         logger.debug('put: ' + str(req.url))
-
-    def request(self, url, headers=None, body=None, method='GET', callto=None):
-        self.append(httputils.ReqInfo(url, headers, body, method, callto))
