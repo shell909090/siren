@@ -4,14 +4,18 @@
 @date: 2013-06-05
 @author: shell.xu
 '''
-import re, sys, pprint, logging
+import re, sys, gzip, pprint, logging, cStringIO
 from os import path
 import yaml, chardet
-from lxml import html
+from lxml import etree, html
 
 logger = logging.getLogger('application')
 
 class ParseError(StandardError): pass
+
+def findset(app, cfg, d):
+    keys = set(cfg.keys()) & set(d.keys())
+    return [d[key](app, cfg[key], cfg) for key in keys]
 
 from httputils import httpwrap
 
@@ -22,24 +26,11 @@ def lxmlwrap(*funcs):
         for func in funcs: func(worker, req, resp, m)
     return httpwrap(inner)
 
-import html_parser, filters
-def parser_map(app, cfg, link=False):
-    keys = set(cfg.keys())
-    ps = [html_parser.LxmlParser,]
-    fs = [filters.TxtFilter,]
-    p = None
-    for pcls in ps:
-        if pcls.keyset & keys:
-            p = pcls(cfg)
-            break
-    if p is None: raise ParseError('no parser match for config: %s' % str(cfg))
-    for fcls in fs:
-        if fcls.keyset & keys: p = fcls(app, cfg, p)
-    if link: p = filters.LinkFilter(app, cfg, p)
-    return p
-
 class Application(object):
     rules = {}
+    lxmls = {}
+    https = {}
+    keyset = set()
 
     def __init__(self, filepath, inherit=None):
         self.bases, self.matches = [], []
@@ -63,6 +54,16 @@ class Application(object):
             self.cfg['after'] = self.loadfunc(self.cfg['after'])
         if 'result' in self.cfg:
             self.result = self.loadfunc(self.cfg['result'])
+
+    @classmethod
+    def register(cls, name, funcname=None):
+        l = getattr(cls, name)
+        def inner(func):
+            fn = funcname or func.__name__
+            l[fn] = func
+            cls.keyset.add(fn)
+            return func
+        return inner
 
     def result(self, req, result):
         print req, result
@@ -93,51 +94,14 @@ class Application(object):
         if 'redirect' in p:
             def func(worker, req, m): worker.request(p['redirect'])
             return func
-        lfuncs = set(('links', 'result', 'lxml')) & set(p.keys())
-        if lfuncs:
-            l = []
-            for key in lfuncs:
-                if key == 'links': l.append(self.predef_links(p))
-                elif key == 'result': l.append(self.predef_result(p))
-                elif key == 'lxml': l.append(self.loadfunc(p['lxml']))
-            return lxmlwrap(*l)
-        lfuncs = set(('download', 'http')) & set(p.keys())
-        if lfuncs:
-            l = []
-            for key in lfuncs:
-                if key == 'download': l.append(self.predef_download(p['download']))
-                elif key == 'http': l.append(self.loadfunc(p['http']))
-            return httpwrap(*l)
+
+        lfuncs = findset(self, p, self.lxmls)
+        if lfuncs: return lxmlwrap(*lfuncs)
+        lfuncs = findset(self, p, self.https)
+        if lfuncs: return httpwrap(*lfuncs)
+
         if 'url' in p: return self.loadfunc(p['url'])
         raise ParseError('no handler for match')
-
-    def predef_download(self, download):
-        if not download: download = self.cfg.get('download')
-        if download: download = self.loadfunc(download)
-        else:
-            downdir = self.cfg['downdir']
-            def download(worker, req, resp, m):
-                filepath = path.join(downdir, path.basename(req.url))
-                with open(filepath, 'wb') as fo: fo.write(resp)
-        return download
-
-    def predef_links(self, p):
-        links = [parser_map(self, cfg, True)
-                 for cfg in p['links']]
-        def inner(worker, req, resp, m):
-            for parser in links:
-                for req in parser(req, resp, m): worker.append(req)
-        return inner
-
-    def predef_result(self, p):
-        result = [(k, parser_map(self, v, False))
-                  for k, v in p['result'].iteritems()]
-        def inner(worker, req, resp, m):
-            r = dict((k, list(parser(req, resp, m)))
-                     for k, parser in result)
-            if 'after' in self.cfg: r = self.cfg['after'](r)
-            if r: worker.result(req, r)
-        return inner
 
     def loadfunc(self, name):
         if name is None: return None
@@ -145,5 +109,72 @@ class Application(object):
             modname, funcname = name.split(':')
         else: modname, funcname = None, name
         if not modname: modname = self.cfg['file']
+        basedir = path.dirname(path.realpath(__file__))
+        if basedir not in sys.path: sys.path.append(basedir)
         if self.basedir not in sys.path: sys.path.append(self.basedir)
         return getattr(__import__(modname), funcname)
+
+import html_parser, sitemap_parser, filters
+def parser_map(app, cfg):
+    keys = set(cfg.keys())
+    parser = None
+    for pcls in [html_parser.LxmlParser,]:
+        if pcls.keyset & keys:
+            parser = pcls(cfg)
+            break
+    if parser is None:
+        raise ParseError('no parser match for config: %s' % str(cfg))
+    for fcls in [filters.TxtFilter,]:
+        if fcls.keyset & keys: parser = fcls(app, cfg, parser)
+    return parser
+
+@Application.register('lxmls', 'lxml')
+def flxml(app, p, cfg): return app.loadfunc(p)
+
+@Application.register('lxmls')
+def links(app, p, cfg):
+    links = [filters.LinkFilter(app, c, parser_map(app, c)) for c in p]
+    def inner(worker, req, resp, m):
+        for parser in links:
+            for req in parser(req, resp, m): worker.append(req)
+    return inner
+
+@Application.register('lxmls')
+def result(app, p, cfg):
+    result = [(k, parser_map(app, v)) for k, v in p.iteritems()]
+    def inner(worker, req, resp, m):
+        r = dict((k, list(parser(req, resp, m)))
+                 for k, parser in result)
+        if 'after' in app.cfg: r = app.cfg['after'](r)
+        if r: worker.result(worker, req, r)
+    return inner
+
+@Application.register('https', 'http')
+def fhttp(app, p, cfg): return app.loadfunc(p)
+
+@Application.register('https', 'download')
+def fdownload(app, p, cfg):
+    if not p: p = app.cfg.get('download')
+    if p: download = app.loadfunc(p)
+    else:
+        downdir = app.cfg['downdir']
+        def download(worker, req, resp, m):
+            filepath = path.join(downdir, path.basename(req.url))
+            with open(filepath, 'wb') as fo: fo.write(resp)
+    return download
+
+@Application.register('https')
+def sitemap(app, p, cfg):
+    keys = set(p.keys())
+    def parser(req, resp, m):
+        resp = gzip.GzipFile(fileobj=cStringIO.StringIO(resp.content)).read()
+        doc = etree.fromstring(resp)
+        for loc in doc.xpath('ns:url/ns:loc', namespaces={
+                'ns':'http://www.sitemaps.org/schemas/sitemap/0.9'}):
+            yield loc.text
+    for fcls in [filters.TxtFilter,]:
+        if fcls.keyset & keys: parser = fcls(app, p, parser)
+    parser = filters.LinkFilter(app, p, parser)
+    def inner(worker, req, resp, m):
+        for req in parser(req, resp, m): worker.append(req)
+    return inner

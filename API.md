@@ -10,6 +10,8 @@
 
 resp为下载到的原始内容，doc为lxml解析后的结果。m为匹配时的正则表达式结果（如果是正则的话）。
 
+* result(worker, req, rslt)
+
 # worker对象 #
 
 worker对象是和队列有关的对象，一般包括以下几个方法。

@@ -28,6 +28,7 @@ class GeventWorker(Worker):
             reqsrc = self.queue.get()
             if reqsrc is None: return
             req = httputils.ReqInfo.unpack(reqsrc)
+            # FIXME: doing
             if req.url in self.done: continue
             else: self.done.add(req.url)
             logger.debug('get: ' + req.url)

@@ -38,6 +38,7 @@ id必须有callto才能执行，因此和base/match不冲突。当只有url时�
 
 * yaml: 指定另一个yaml处理。
 * redirect: 自动抓取另一个url，而不抓当前url。
+* sitemap: download a sitemap and add all them into queue. txt filter and link filter can be used.
 * links: 使用request下载内容，使用lxml.html解析。而后使用parsers进行逐项解析。这个项目的值应该是一个list。
 * result: 使用request下载内容，使用lxml.html解析。而后使用parsers进行逐项解析。这个项目的值应该是一个dict。
 * lxml: 使用request下载内容，使用lxml.html解析，然后调用后面所指定的python函数。并且将结果一并传递。
