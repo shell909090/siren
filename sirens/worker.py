@@ -37,6 +37,13 @@ class GeventWorker(Worker):
 
     def append(self, req):
         if req.url in self.done: return
+        if not self.app.accessible(req.url):
+            logger.info('%s not accessible for robots.txt.' % req.url)
+            return
+        if req.headers and 'headers' in self.app.cfg:
+            h = self.app.cfg['headers'].copy()
+            h.update(req.headers)
+            req.headers = h
         self.queue.put(req.pack())
         logger.debug('put: ' + str(req.url))
 
@@ -60,5 +67,11 @@ class BeanstalkWorker(Worker):
             job.delete()
 
     def append(self, req):
+        if not self.app.accessible(url):
+            logger.info('%s not accessible for robots.txt.' % req.url)
+        if req.headers and 'headers' in self.app.cfg:
+            h = self.app.cfg['headers'].copy()
+            h.update(req.headers)
+            req.headers = h
         self.queue.put(req.pack())
         logger.debug('put: ' + str(req.url))

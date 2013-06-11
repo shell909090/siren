@@ -10,7 +10,7 @@ import httputils
 
 def findset(app, cfg, d):
     keys = set(cfg.keys()) & set(d.keys())
-    return [d[key](cfg[key], cfg, app) for key in keys]
+    return [d[key](app, cfg[key], cfg) for key in keys]
 
 class TxtFilter(object):
     filters = {}
@@ -41,17 +41,17 @@ class TxtFilter(object):
             if self.after and self.after(s): break
 
 @TxtFilter.register('is')
-def fis(p, cfg, app):
+def fis(app, p, cfg):
     reis = re.compile(p)
     return lambda s: not reis.match(s)
 
 @TxtFilter.register()
-def isnot(p, cfg, app):
+def isnot(app, p, cfg):
     reisnot = re.compile(p)
     return lambda s: reisnot.match(s)
 
 @TxtFilter.register()
-def dictreplace(p, cfg, app):
+def dictreplace(app, p, cfg):
     r = re.compile(p[0])
     return lambda s: p[1].format(**r.match(s).groupdict())
 
@@ -88,10 +88,25 @@ class LinkFilter(object):
             yield req
 
 @LinkFilter.register('reqfilters')
-def callto(p, cfg, app):
+def callto(app, p, cfg):
     if ':' in p: id = p
     else: id = '%s:%s' % (app.filename, p)
     def inner(req):
         req.callto = id
+        return req
+    return inner
+
+@LinkFilter.register('reqfilters')
+def headers(app, p, cfg):
+    def inner(req):
+        req.headers = p
+        return req
+    return inner
+
+@LinkFilter.register('reqfilters')
+def method(app, p, cfg):
+    p = p.upper()
+    def inner(req):
+        req.method = p
         return req
     return inner

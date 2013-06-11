@@ -17,14 +17,14 @@ def findset(app, cfg, d):
     keys = set(cfg.keys()) & set(d.keys())
     return [d[key](app, cfg[key], cfg) for key in keys]
 
-from httputils import httpwrap
+from httputils import accessible, HttpHub
 
-def lxmlwrap(*funcs):
+def lxmlwrap(app, *funcs):
     def inner(worker, req, resp, m):
         resp.encoding = chardet.detect(resp.content)['encoding']
         resp = html.fromstring(resp.text)
         for func in funcs: func(worker, req, resp, m)
-    return httpwrap(inner)
+    return app.http(inner)
 
 class Application(object):
     rules = {}
@@ -54,6 +54,9 @@ class Application(object):
             self.cfg['after'] = self.loadfunc(self.cfg['after'])
         if 'result' in self.cfg:
             self.result = self.loadfunc(self.cfg['result'])
+        if 'disable_robots' not in self.cfg: self.accessible = accessible
+        else: self.accessible = lambda url: True
+        self.http = HttpHub(self.cfg)
 
     @classmethod
     def register(cls, name, funcname=None):
@@ -96,9 +99,9 @@ class Application(object):
             return func
 
         lfuncs = findset(self, p, self.lxmls)
-        if lfuncs: return lxmlwrap(*lfuncs)
+        if lfuncs: return lxmlwrap(self, *lfuncs)
         lfuncs = findset(self, p, self.https)
-        if lfuncs: return httpwrap(*lfuncs)
+        if lfuncs: return self.http(*lfuncs)
 
         if 'url' in p: return self.loadfunc(p['url'])
         raise ParseError('no handler for match')

@@ -4,6 +4,10 @@
 * download: 指明下载的处理函数。
 * downdir: 未指明下载函数时以文件名下载到该目录。注意，同名文件会互相覆盖。
 * result: 指明结果数据的处理函数。
+* disable_robots: disable robots limitation.
+* headers: default headers.
+* timeout: timeout setup
+* delay: crawl-delay
 
 # 匹配模式 #
 
@@ -75,3 +79,5 @@ id必须有callto才能执行，因此和base/match不冲突。当只有url时�
 # link filter #
 
 * callto: 使用callto指定的id执行该link的解析。
+* headers: request headers
+* method: GET/POST/PUT...
