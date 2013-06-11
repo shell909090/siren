@@ -45,12 +45,12 @@ class HttpHub(object):
 
     def __call__(self, *funcs):
         def inner(worker, req, m):
-            u = urlparse(url)
-            if u.netloc not in sessions:
+            u = urlparse(req.url)
+            if u.netloc not in self.sessions:
                 sess = requests.Session()
                 sess.headers = self.headers
                 self.sessions[u.netloc] = sess
-            sess = self.session[u.netloc]
+            sess = self.sessions[u.netloc]
             resp = sess.request(
                 req.method or 'GET', req.url, data=req.body,
                 headers=req.headers, timeout=self.timeout)

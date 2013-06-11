@@ -42,14 +42,6 @@ class Application(object):
             c.update(self.cfg)
             self.cfg = c
 
-        for p in self.cfg['patterns']:
-            func = self.loadaction(p)
-            if 'id' in p: self.rules[self.filename][p['id']] = func
-            if 'base' in p: self.bases.append((p['base'], func, p))
-            elif 'match' in p: self.matches.append((re.compile(p['match']), func, p))
-            elif 'id' not in p: raise ParseError('unknown patterns')
-        del self.cfg['patterns']
-
         if 'after' in self.cfg:
             self.cfg['after'] = self.loadfunc(self.cfg['after'])
         if 'result' in self.cfg:
@@ -57,6 +49,14 @@ class Application(object):
         if 'disable_robots' not in self.cfg: self.accessible = accessible
         else: self.accessible = lambda url: True
         self.http = HttpHub(self.cfg)
+
+        for p in self.cfg['patterns']:
+            func = self.loadaction(p)
+            if 'id' in p: self.rules[self.filename][p['id']] = func
+            if 'base' in p: self.bases.append((p['base'], func, p))
+            elif 'match' in p: self.matches.append((re.compile(p['match']), func, p))
+            elif 'id' not in p: raise ParseError('unknown patterns')
+        del self.cfg['patterns']
 
     @classmethod
     def register(cls, name, funcname=None):
