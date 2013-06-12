@@ -4,10 +4,10 @@
 @date: 2013-06-07
 @author: shell.xu
 '''
-import json, logging
+import json, time, logging
 from urlparse import urlparse
 from robotparser import RobotFileParser
-import requests
+import gevent, requests
 
 logger = logging.getLogger('http')
 
@@ -23,6 +23,19 @@ class ReqInfo(object):
         return json.dumps({'url': self.url, 'headers': self.headers,
                            'body': self.body, 'method': self.method,
                            'callto': self.callto})
+
+class SpeedLimit(object):
+
+    def __init__(self, interval):
+        self.last, self.interval = None, interval
+
+    def get(self, url):
+        if self.last is None:
+            self.last = time.time()
+            return
+        while (self.last + self.interval) > time.time():
+            gevent.sleep(self.last + self.interval - time.time())
+        self.last = time.time()
 
 robots_cache = {}
 

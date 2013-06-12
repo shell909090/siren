@@ -48,6 +48,9 @@ class Application(object):
             self.result = self.loadfunc(self.cfg['result'])
         if 'disable_robots' not in self.cfg: self.accessible = accessible
         else: self.accessible = lambda url: True
+        self.limit = None
+        if 'interval' in self.cfg:
+            self.limit = httputils.SpeedLimit(self.cfg['interval'])
         self.http = HttpHub(self.cfg)
 
         for p in self.cfg['patterns']:
@@ -72,6 +75,7 @@ class Application(object):
         print req, result
 
     def __call__(self, worker, req, m=None):
+        if self.limit is not None: self.limit.get(req.url)
         if req.callto is not None:
             modname = self.filename
             if ':' in req.callto:

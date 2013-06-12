@@ -7,7 +7,7 @@
 * disable_robots: disable robots limitation.
 * headers: default headers.
 * timeout: timeout setup
-* delay: crawl-delay * not support yet
+* interval: crawl-delay * not support yet
 
 # 匹配模式 #
 
