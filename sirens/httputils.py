@@ -34,7 +34,7 @@ class SpeedLimit(object):
             self.last = time.time()
             return
         while (self.last + self.interval) > time.time():
-            gevent.sleep(self.last + self.interval - time.time())
+            gevent.sleep(self.last + self.interval - time.time() + 0.1)
         self.last = time.time()
 
 robots_cache = {}

@@ -8,6 +8,7 @@ import re, sys, gzip, pprint, logging, cStringIO
 from os import path
 import yaml, chardet
 from lxml import etree, html
+import httputils
 
 logger = logging.getLogger('application')
 
@@ -17,7 +18,6 @@ def findset(app, cfg, d):
     keys = set(cfg.keys()) & set(d.keys())
     return [d[key](app, cfg[key], cfg) for key in keys]
 
-from httputils import accessible, HttpHub
 
 def lxmlwrap(app, *funcs):
     def inner(worker, req, resp, m):
@@ -46,12 +46,13 @@ class Application(object):
             self.cfg['after'] = self.loadfunc(self.cfg['after'])
         if 'result' in self.cfg:
             self.result = self.loadfunc(self.cfg['result'])
-        if 'disable_robots' not in self.cfg: self.accessible = accessible
+        if 'disable_robots' not in self.cfg:
+            self.accessible = httputils.accessible
         else: self.accessible = lambda url: True
         self.limit = None
         if 'interval' in self.cfg:
             self.limit = httputils.SpeedLimit(self.cfg['interval'])
-        self.http = HttpHub(self.cfg)
+        self.http = httputils.HttpHub(self.cfg)
 
         for p in self.cfg['patterns']:
             func = self.loadaction(p)

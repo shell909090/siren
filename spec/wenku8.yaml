@@ -1,5 +1,6 @@
 name: wenku8
 timeout: 10
+interval: 5
 result: novel:result
 patterns:
   - name: table of content
