@@ -34,19 +34,19 @@ class LxmlParser(object):
             return func
         return inner
 
-    def __call__(self, req, resp, m):
-        for node in self.src(resp):
+    def __call__(self, req, doc, m):
+        for node in self.src(doc):
             s = self.tostr(node)
             if s: yield s
 
 @LxmlParser.register('sources')
 def css(p):
     sel = CSSSelector(p)
-    return lambda resp: sel(resp)
+    return lambda doc: sel(doc)
 
 @LxmlParser.register('sources')
 def xpath(p):
-    return lambda resp: resp.xpath(p)
+    return lambda doc: doc.xpath(p)
 
 @LxmlParser.register('tostrs')
 def attr(p):

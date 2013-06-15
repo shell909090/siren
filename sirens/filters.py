@@ -16,8 +16,8 @@ class TxtFilter(object):
     filters = {}
     keyset = set()
 
-    def __init__(self, app, cfg, p):
-        self.cfg, self.p = cfg, p
+    def __init__(self, app, cfg, parser):
+        self.cfg, self.parser = cfg, parser
         self.filter = findset(app, self.cfg, self.filters)
         self.before = app.loadfunc(cfg.get('before'))
         self.after = app.loadfunc(cfg.get('after'))
@@ -32,8 +32,8 @@ class TxtFilter(object):
             return func
         return inner
 
-    def __call__(self, req, resp, m):
-        for s in self.p(req, resp, m):
+    def __call__(self, req, doc, m):
+        for s in self.parser(req, doc, m):
             if any(itertools.imap(lambda f: f(s), self.filter)): continue
             if self.before and self.before(s): continue
             if self.map: s = self.map(s)
@@ -63,8 +63,8 @@ class LinkFilter(object):
     linkproc = {}
     keyset = set()
 
-    def __init__(self, app, cfg, p):
-        self.cfg, self.p = cfg, p
+    def __init__(self, app, cfg, parser):
+        self.cfg, self.parser = cfg, parser
         self.rfs = findset(app, self.cfg, self.linkproc)
 
     @classmethod
@@ -76,24 +76,32 @@ class LinkFilter(object):
             return func
         return inner
 
-    def __call__(self, req, resp, m):
-        for s in self.p(req, resp, m):
-            req = httputils.ReqInfo(absolute_url(req.url, s))
-            for rf in self.rfs: req = rf(req)
-            yield req
+    def __call__(self, req, doc, m):
+        for s in self.parser(req, doc, m):
+            nreq = httputils.ReqInfo(None, absolute_url(req.url, s))
+            for rf in self.rfs: nreq = rf(nreq, doc)
+            assert nreq.procname, "dont know which processor to call."
+            yield nreq
 
 @LinkFilter.register()
-def callto(app, cmdcfg, cfg):
-    if ':' in cmdcfg: id = cmdcfg
-    else: id = '%s:%s' % (app.filename, cmdcfg)
-    def inner(req):
-        req.callto = id
+def call(app, cmdcfg, cfg):
+    if ':' not in cmdcfg:
+        assert cmdcfg in app.processor, "unknown processor name"
+    else: assert app.loadfunc(cmdcfg), "unknown python function"
+    def inner(req, doc):
+        req.procname = cmdcfg
         return req
+    return inner
+
+# TODO:
+@LinkFilter.register()
+def params(app, cmdcfg, cfg):
+    def inner(req, doc): return req
     return inner
 
 @LinkFilter.register()
 def headers(app, cmdcfg, cfg):
-    def inner(req):
+    def inner(req, doc):
         req.headers = cmdcfg
         return req
     return inner
@@ -101,7 +109,7 @@ def headers(app, cmdcfg, cfg):
 @LinkFilter.register()
 def method(app, cmdcfg, cfg):
     cmdcfg = cmdcfg.upper()
-    def inner(req):
+    def inner(req, doc):
         req.method = cmdcfg
         return req
     return inner

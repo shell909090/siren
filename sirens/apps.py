@@ -19,10 +19,10 @@ def findset(app, cfg, d):
     return [d[key](app, cfg[key], cfg) for key in keys]
 
 def lxmlwrap(app, *funcs):
-    def inner(worker, req, resp, m):
+    def inner(worker, req, resp, params):
         resp.encoding = chardet.detect(resp.content)['encoding']
-        resp = html.fromstring(resp.text)
-        for func in funcs: func(worker, req, resp, m)
+        doc = html.fromstring(resp.text)
+        for func in funcs: func(worker, req, doc, params)
     return app.http(inner)
 
 class Application(object):
@@ -33,6 +33,7 @@ class Application(object):
     def __init__(self, filepath):
         self.processors = {}
         self.basedir, self.filename = path.split(filepath)
+        if self.basedir not in sys.path: sys.path.append(self.basedir)
         with open(filepath) as fi: self.cfg = yaml.load(fi.read())
 
         if 'after' in self.cfg:
@@ -65,43 +66,31 @@ class Application(object):
     def result(self, req, result):
         print req, result
 
-    def __call__(self, worker, req, params):
+    def __call__(self, worker, req):
         if self.limit is not None: self.limit.get(req.url)
-        # modname = self.filename
-        # if ':' in req.callto:
-        #     modname, req.callto = req.callto.split(':', 1)
-        # func = self.rules[modname].get(req.callto)
-        assert func, 'callto function %s not exist in rules.' % cur
-        return func(worker, req, m)
+        if ':' in req.procname:
+            proc = self.loadfunc(req.procname)
+            assert proc, "unkown python function"
+        else:
+            assert req.procname in self.processor, "unknown processor name"
+            proc = self.processor[req.procname]
+        return proc(worker, req, req.params)
 
     def loadaction(self, proccfg):
-        # FIXME:
-        # if 'redirect' in proccfg:
-        #     def func(worker, req, m):
-        #         req = httputils.ReqInfo('', proccfg['redirect'])
-        #         worker.append(req)
-        #     return func
-
         procs = findset(self, proccfg, self.lxmlproc)
         if procs: return lxmlwrap(self, *procs)
         procs = findset(self, proccfg, self.httpproc)
         if procs: return self.http(*procs)
-
         if 'url' in p: return self.loadfunc(p['url'])
         raise ParseError('no handler for match')
 
     def loadfunc(self, name):
         if name is None: return None
-        if ':' in name:
-            modname, funcname = name.split(':')
-        else: modname, funcname = None, name
+        modname, funcname = name.split(':')
         if not modname: modname = self.cfg['file']
-        basedir = path.dirname(path.realpath(__file__))
-        if basedir not in sys.path: sys.path.append(basedir)
-        if self.basedir not in sys.path: sys.path.append(self.basedir)
         return getattr(__import__(modname), funcname)
 
-import html_parser, sitemap_parser, filters
+import html_parser, filters
 def parser_map(app, cfg):
     keys = set(cfg.keys())
     parser = None
@@ -121,20 +110,20 @@ def flxml(app, cmdcfg, cfg): return app.loadfunc(cmdcfg)
 @Application.register('lxmlproc')
 def links(app, cmdcfg, cfg):
     links = [filters.LinkFilter(app, c, parser_map(app, c)) for c in cmdcfg]
-    def inner(worker, req, resp, m):
+    def inner(worker, req, doc, m):
         for parser in links:
-            for req in parser(req, resp, m): worker.append(req)
+            for req in parser(req, doc, m): worker.append(req)
     return inner
 
 @Application.register('lxmlproc')
 def result(app, cmdcfg, cfg):
     # FIXME:
     result = [(k, parser_map(app, v)) for k, v in cmdcfg.iteritems()]
-    def inner(worker, req, resp, m):
-        r = dict((k, list(parser(req, resp, m)))
+    def inner(worker, req, doc, m):
+        r = dict((k, list(parser(req, doc, m)))
                  for k, parser in result)
         if 'after' in app.cfg: r = app.cfg['after'](r)
-        if r: worker.result(worker, req, r)
+        if r: app.result(req, r)
     return inner
 
 @Application.register('httpproc', 'http')
@@ -147,7 +136,7 @@ def fdownload(app, cmdcfg, cfg):
     else:
         assert 'downdir' in app.cfg, 'no download setting, no downdir'
         downdir = app.cfg['downdir']
-        def download(worker, req, resp, m):
+        def download(worker, req, resp, params):
             filepath = path.join(downdir, path.basename(req.url))
             with open(filepath, 'wb') as fo: fo.write(resp)
     return download
@@ -155,7 +144,7 @@ def fdownload(app, cmdcfg, cfg):
 @Application.register('httpproc')
 def sitemap(app, cmdcfg, cfg):
     keys = set(cmdcfg.keys())
-    def parser(req, resp, m):
+    def parser(req, resp, params):
         resp = gzip.GzipFile(fileobj=cStringIO.StringIO(resp.content)).read()
         doc = etree.fromstring(resp)
         for loc in doc.xpath('ns:url/ns:loc', namespaces={
@@ -164,6 +153,6 @@ def sitemap(app, cmdcfg, cfg):
     for fcls in [filters.TxtFilter,]:
         if fcls.keyset & keys: parser = fcls(app, p, parser)
     parser = filters.LinkFilter(app, p, parser)
-    def inner(worker, req, resp, m):
-        for req in parser(req, resp, m): worker.append(req)
+    def inner(worker, req, resp, params):
+        for req in parser(req, resp, params): worker.append(req)
     return inner

@@ -4,9 +4,9 @@
 
 下载函数的一般性形态有以下几种：
 
-* url(worker, req, m)
-* http(worker, res, resp, m)
-* lxml(worker, res, doc, m)
+* url(worker, req, params)
+* http(worker, res, resp, params)
+* lxml(worker, res, doc, params)
 
 resp为下载到的原始内容，doc为lxml解析后的结果。m为匹配时的正则表达式结果（如果是正则的话）。
 
