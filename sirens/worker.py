@@ -32,7 +32,7 @@ class GeventWorker(Worker):
             if req.url in self.done: continue
             else: self.done.add(req.url)
             logger.debug('get: ' + req.url)
-            self.app(self, req)
+            self.app(self, req, None)
             self.queue.task_done()
 
     def append(self, req):
@@ -63,7 +63,7 @@ class BeanstalkWorker(Worker):
             if job is None: return
             req = ReqInfo.unpack(job.body)
             logger.debug('get: ' + req)
-            self.app(self, req)
+            self.app(self, req, None)
             job.delete()
 
     def append(self, req):

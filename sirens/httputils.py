@@ -13,16 +13,16 @@ logger = logging.getLogger('http')
 
 class ReqInfo(object):
 
-    def __init__(self, url, headers=None, body=None, method='GET', callto=None):
-        self.url, self.headers, self.body, self.method = url, headers, body, method
-        self.callto = callto
+    def __init__(self, procname, url, params=None, headers=None, body=None, method='GET'):
+        self.procname, self.url, self.params = procname, url, params
+        self.headers, self.body, self.method = headers, body, method
 
     @classmethod
     def unpack(cls, s): return cls(**json.loads(s))
     def pack(self):
-        return json.dumps({'url': self.url, 'headers': self.headers,
-                           'body': self.body, 'method': self.method,
-                           'callto': self.callto})
+        return json.dumps({
+                'procname': self.procname, 'url': self.url, 'params': self.params,
+                'headers': self.headers, 'body': self.body, 'method': self.method})
 
 class SpeedLimit(object):
 

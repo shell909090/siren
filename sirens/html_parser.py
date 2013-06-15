@@ -37,8 +37,7 @@ class LxmlParser(object):
     def __call__(self, req, resp, m):
         for node in self.src(resp):
             s = self.tostr(node)
-            if not s: continue
-            yield s
+            if s: yield s
 
 @LxmlParser.register('sources')
 def css(p):

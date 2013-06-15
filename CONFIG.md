@@ -11,36 +11,11 @@
 
 # 匹配模式 #
 
-模式匹配有3种模式，id，base和match。id最优先，其次base，最后match。
-
-* id: 使用callto指令，提交一个链接的时候可以同时指明用于处理的配置。
-* base: 使用startswith工作，速度较快。一般用于大型网站的分割组合，复杂度隔离。
-* match: 使用正则表达式工作，速度较慢。
-
-id必须有callto才能执行，因此和base/match不冲突。当只有url时，如果base命中任意一条，就不执行match。如果没有base命中，则执行所有命中的match。
-
-# 配置嵌套 #
-
-在一个配置内，可以使用yaml加载另一个同目录下的yaml配置作为处理函数。
-
-因此会引起一些衍生问题。例如，原本有一个yaml配置，声明了function1这么一种action。要调用function1，需要在link中指定callto: function1。但当这个配置被作为另一个配置的子配置加载时，function1就变成了主配置的某个id为function1的action。原本可以执行的callto就无法工作了。
-
-当然，也可以让callto只调用本层的action。但是这就失去了跨配置调用的能力。而且在跨系统上有很大问题。
-
-解决这个问题的方法是使用逐层模型。在第一层中可以指定id和base/match。调用时可以用id1.function1指名具体的action。
-
-目前的callto已经经过调整。当callto的对象不是全局对象（没有.）时，会自动加上本配置的id作为前缀。因此又衍生出两个问题。
-
-* 自动添加前缀只能添加一级。
-* 配置如果指定了id，会有多余的东西被添上去。
-
-关于这一问题，理想的方案是只能调用本配置的对应id，而不具备跨配置调用能力。这一目标比较难，目前正在考虑。
-
-另外一个问题是base，当被某个base匹配到时，url会被自动脱去这个前缀。
+* name: 使用callto指令，提交一个链接的时候可以同时指明用于处理的配置。
+* desc:
 
 # action #
 
-* yaml: 指定另一个yaml处理。
 * redirect: 自动抓取另一个url，而不抓当前url。
 * sitemap: download a sitemap and add all them into queue. txt filter and link filter can be used.
 * links: 使用request下载内容，使用lxml.html解析。而后使用parsers进行逐项解析。这个项目的值应该是一个list。

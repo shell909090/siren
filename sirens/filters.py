@@ -41,72 +41,67 @@ class TxtFilter(object):
             if self.after and self.after(s): break
 
 @TxtFilter.register('is')
-def fis(app, p, cfg):
-    reis = re.compile(p)
+def fis(app, cmdcfg, cfg):
+    reis = re.compile(cmdcfg)
     return lambda s: not reis.match(s)
 
 @TxtFilter.register()
-def isnot(app, p, cfg):
-    reisnot = re.compile(p)
+def isnot(app, cmdcfg, cfg):
+    reisnot = re.compile(cmdcfg)
     return lambda s: reisnot.match(s)
 
 @TxtFilter.register()
-def dictreplace(app, p, cfg):
-    r = re.compile(p[0])
-    return lambda s: p[1].format(**r.match(s).groupdict())
+def dictreplace(app, cmdcfg, cfg):
+    r = re.compile(cmdcfg[0])
+    return lambda s: cmdcfg[1].format(**r.match(s).groupdict())
 
 def absolute_url(url, i):
     if i.startswith('http'): return i
     return urljoin(url, i)
 
 class LinkFilter(object):
-    # urlfilters = {}
-    reqfilters = {}
+    linkproc = {}
     keyset = set()
 
     def __init__(self, app, cfg, p):
         self.cfg, self.p = cfg, p
-        # self.ufs = findset(app, self.cfg, self.urlfilters)
-        self.rfs = findset(app, self.cfg, self.reqfilters)
+        self.rfs = findset(app, self.cfg, self.linkproc)
 
     @classmethod
-    def register(cls, name, funcname=None):
-        l = getattr(cls, name)
+    def register(cls, funcname=None):
         def inner(func):
             fn = funcname or func.__name__
-            l[fn] = func
+            cls.linkproc[fn] = func
             cls.keyset.add(fn)
             return func
         return inner
 
     def __call__(self, req, resp, m):
         for s in self.p(req, resp, m):
-            url = absolute_url(req.url, s)
-            # for uf in self.ufs: url = uf(url)
-            req = httputils.ReqInfo(url)
+            req = httputils.ReqInfo(absolute_url(req.url, s))
             for rf in self.rfs: req = rf(req)
             yield req
 
-@LinkFilter.register('reqfilters')
-def callto(app, p, cfg):
-    if ':' in p: id = p
-    else: id = '%s:%s' % (app.filename, p)
+@LinkFilter.register()
+def callto(app, cmdcfg, cfg):
+    if ':' in cmdcfg: id = cmdcfg
+    else: id = '%s:%s' % (app.filename, cmdcfg)
     def inner(req):
         req.callto = id
         return req
     return inner
 
-@LinkFilter.register('reqfilters')
-def headers(app, p, cfg):
+@LinkFilter.register()
+def headers(app, cmdcfg, cfg):
     def inner(req):
-        req.headers = p
+        req.headers = cmdcfg
         return req
     return inner
 
-@LinkFilter.register('reqfilters')
-def method(app, p, cfg):
-    p = p.upper()
+@LinkFilter.register()
+def method(app, cmdcfg, cfg):
+    cmdcfg = cmdcfg.upper()
     def inner(req):
-        req.method = p
+        req.method = cmdcfg
         return req
     return inner
