@@ -64,7 +64,7 @@ def initlog(lv, logfile=None):
 
 def run(args):
     gevent.monkey.patch_all()
-    initlog(optdict.get('-l', 'DEBUG'))
+    initlog(optdict.get('-l', 'INFO'))
     funcname = optdict.get('-f', 'main')
 
     app = sirens.Application(args[0])
@@ -78,7 +78,7 @@ def run(args):
 
 def worker(args):
     gevent.monkey.patch_all()
-    initlog(optdict.get('-l', 'DEBUG'))
+    initlog(optdict.get('-l', 'INFO'))
 
     app = sirens.Application(args[0])
     size = int(optdict.get('-s', '100'))

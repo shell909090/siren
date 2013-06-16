@@ -1,17 +1,18 @@
 name: shell909090
 start: http://shell909090.com/blog/sitemap.xml.gz
 result: internal:debug
-debugfile: debug.log
 patterns:
-  - match: .*/sitemap.xml.gz$
+
+  - name: main
     sitemap:
       is: http://shell909090.com/blog/[0-9]*/[0-9]*/.*
-      callto: blog
-  - id: blog
-    result:
-      title:
-        css: h1.entry-title
+      call: blog
+
+  - name: blog
+    parsers:
+      - css: h1.entry-title
         text: yes
-      content:
-        css: div.entry-content
+        result: title
+      - css: div.entry-content
         html2text: yes
+        result: content

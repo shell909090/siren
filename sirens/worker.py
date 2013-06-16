@@ -26,7 +26,7 @@ class GeventWorker(object):
             # FIXME: doing
             if req.url in self.done: continue
             else: self.done.add(req.url)
-            logger.debug('get: ' + req.url)
+            logger.info('get: ' + req.url)
             self.app(self, req)
             self.queue.task_done()
 
@@ -40,7 +40,7 @@ class GeventWorker(object):
             h.update(req.headers)
             req.headers = h
         self.queue.put(req.pack())
-        logger.debug('put: ' + str(req.url))
+        logger.info('put: ' + str(req.url))
 
 class BeanstalkWorker(object):
 
@@ -57,7 +57,7 @@ class BeanstalkWorker(object):
             job = self.queue.reserve(timeout=self.timeout)
             if job is None: return
             req = ReqInfo.unpack(job.body)
-            logger.debug('get: ' + req)
+            logger.info('get: ' + req)
             self.app(self, req)
             job.delete()
 
@@ -69,4 +69,4 @@ class BeanstalkWorker(object):
             h.update(req.headers)
             req.headers = h
         self.queue.put(req.pack())
-        logger.debug('put: ' + str(req.url))
+        logger.info('put: ' + str(req.url))

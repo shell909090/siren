@@ -2,20 +2,23 @@ name: wenku8
 timeout: 10
 interval: 5
 result: novel:result
+output: output.txt
 patterns:
+
   - name: main
     desc: table of content
-    links:
+    parsers:
       - css: a
         attr: href
         is: "[0-9]+\\.htm"
         call: node
+
   - name: node
     desc: node
-    result:
-      title:
-        css: div#title
+    parsers:
+      - css: div#title
         text: yes
-      content:
-        css: div#content
+        result: title
+      - css: div#content
         html2text: yes
+        result: content

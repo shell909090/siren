@@ -4,84 +4,58 @@
 @date: 2013-06-07
 @author: shell.xu
 '''
-import re, os, sys, itertools
+import re, os, sys, logging, itertools
 from urlparse import urljoin
 import httputils
+from bases import *
 
-def findset(app, cfg, d):
-    keys = set(cfg.keys()) & set(d.keys())
-    return [d[key](app, cfg[key], cfg) for key in keys]
+logger = logging.getLogger('filters')
 
-class TxtFilter(object):
-    filters = {}
+class TxtFilter(RegClsBase):
+    regs = {}
     keyset = set()
 
-    def __init__(self, app, cfg, parser):
-        self.cfg, self.parser = cfg, parser
-        self.filter = findset(app, self.cfg, self.filters)
-        self.before = app.loadfunc(cfg.get('before'))
-        self.after = app.loadfunc(cfg.get('after'))
-        self.map = app.loadfunc(cfg.get('map'))
+    def __init__(self, app, cfg, *funcs):
+        self.funcs = funcs
+        self.filter = set_appcfg(app, cfg, self.regs)
+        if 'map' in cfg: self.filter.append(eval(cfg['map']))
 
-    @classmethod
-    def register(cls, funcname=None):
-        def inner(func):
-            fn = funcname or func.__name__
-            cls.filters[fn] = func
-            cls.keyset.add(fn)
-            return func
-        return inner
-
-    def __call__(self, req, doc, m):
-        for s in self.parser(req, doc, m):
-            if any(itertools.imap(lambda f: f(s), self.filter)): continue
-            if self.before and self.before(s): continue
-            if self.map: s = self.map(s)
-            yield s
-            if self.after and self.after(s): break
+    def __call__(self, worker, req, node, s):
+        for f in self.filter:
+            node, s = f(node, s)
+            if not s: return logger.debug('failed filter')
+        logger.debug('passed filter')
+        for func in self.funcs: func(worker, req, node, s)
 
 @TxtFilter.register('is')
 def fis(app, cmdcfg, cfg):
     reis = re.compile(cmdcfg)
-    return lambda s: not reis.match(s)
+    return lambda node, s: (node, s) if reis.match(s) else (None, None)
 
 @TxtFilter.register()
 def isnot(app, cmdcfg, cfg):
     reisnot = re.compile(cmdcfg)
-    return lambda s: reisnot.match(s)
+    return lambda node, s: (None, None) if reisnot.match(s) else (node, s)
 
 @TxtFilter.register()
 def dictreplace(app, cmdcfg, cfg):
     r = re.compile(cmdcfg[0])
-    return lambda s: cmdcfg[1].format(**r.match(s).groupdict())
+    return lambda node, s: node, cmdcfg[1].format(**r.match(s).groupdict())
 
-def absolute_url(url, i):
-    if i.startswith('http'): return i
-    return urljoin(url, i)
-
-class LinkFilter(object):
-    linkproc = {}
+class LinkFilter(RegClsBase):
+    regs = {}
     keyset = set()
 
-    def __init__(self, app, cfg, parser):
-        self.cfg, self.parser = cfg, parser
-        self.rfs = findset(app, self.cfg, self.linkproc)
+    def __init__(self, app, cfg):
+        self.rfs = set_appcfg(app, cfg, self.regs)
 
-    @classmethod
-    def register(cls, funcname=None):
-        def inner(func):
-            fn = funcname or func.__name__
-            cls.linkproc[fn] = func
-            cls.keyset.add(fn)
-            return func
-        return inner
-
-    def __call__(self, req, doc, m):
-        for s in self.parser(req, doc, m):
-            nreq = httputils.ReqInfo(None, absolute_url(req.url, s))
-            for rf in self.rfs: nreq = rf(nreq, doc)
-            assert nreq.procname, "dont know which processor to call."
-            yield nreq
+    def __call__(self, worker, req, node, s):
+        url = s if s.startswith('http') else urljoin(req.url, s)
+        nreq = httputils.ReqInfo(None, url)
+        for rf in self.rfs: nreq = rf(nreq, node)
+        assert nreq.procname, "dont know which processor to call."
+        assert nreq.url, "request without url"
+        worker.append(nreq)
 
 @LinkFilter.register()
 def call(app, cmdcfg, cfg):
@@ -109,4 +83,21 @@ def method(app, cmdcfg, cfg):
     def inner(req, doc):
         req.method = cmdcfg
         return req
+    return inner
+
+class ResultFilter(RegClsBase):
+    regs = {}
+    keyset = set()
+
+    def __init__(self, app, cfg):
+        self.result = set_appcfg(app, cfg, self.regs)
+
+    def __call__(self, worker, req, node, s):
+        for r in self.result: r(req, s)
+
+@ResultFilter.register()
+def result(app, cmdcfg, cfg):
+    def inner(req, s):
+        req.result.setdefault(cmdcfg, [])
+        req.result[cmdcfg].append(s)
     return inner

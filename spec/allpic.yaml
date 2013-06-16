@@ -1,10 +1,10 @@
 downdir: .
 patterns:
-  - match: .*
-    links:
+  - name: main
+    parsers:
       - css: img
         attr: src
         is: .*.jpg
-        callto: download
-  - id: download
+        call: download
+  - name: download
     download:

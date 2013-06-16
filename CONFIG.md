@@ -17,8 +17,7 @@
 # action #
 
 * sitemap: download a sitemap and add all them into queue. txt filter and link filter can be used.
-* links: 使用request下载内容，使用lxml.html解析。而后使用parsers进行逐项解析。这个项目的值应该是一个list。
-* result: 使用request下载内容，使用lxml.html解析。而后使用parsers进行逐项解析。这个项目的值应该是一个dict。
+* parsers: ...
 * lxml: 使用request下载内容，使用lxml.html解析，然后调用后面所指定的python函数。并且将结果一并传递。
 * download: 将url下载，使用指定函数处理。如果指定函数为空，使用config中的download函数进行存储。
 * http: 使用request下载内容，然后调用后面所指定的python函数。并且将结果一并传递。
@@ -45,9 +44,7 @@
 
 * is: 一个正则表达式，命中则通过。
 * isnot: 一个正则表达式，不命中才通过。
-* before: 在执行前调用特定python函数，返回True跳过当前对象。
-* after: 在执行后调用特定python函数，返回True退出循环。
-* map: 在执行后调用特定python函数，将原始字符串映射为目标字符串。
+* map: map source node, s to node, s. pass if s is False
 * dictreplace: 一个列表，里面两个元素。第一个会被按正则解析，并且匹配出一些命名结果。这些结果会被送入第二个做字符串format合成。
 
 # link filter #

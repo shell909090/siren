@@ -57,7 +57,7 @@ class HttpHub(object):
         self.headers = cfg.get('headers')
 
     def __call__(self, *funcs):
-        def inner(worker, req, params):
+        def inner(worker, req):
             u = urlparse(req.url)
             if u.netloc not in self.sessions:
                 sess = requests.Session()
@@ -67,5 +67,5 @@ class HttpHub(object):
             resp = sess.request(
                 req.method or 'GET', req.url, data=req.body,
                 headers=req.headers, timeout=self.timeout)
-            for func in funcs: func(worker, req, resp, params)
+            for func in funcs: func(worker, req, resp)
         return inner

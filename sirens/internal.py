@@ -6,14 +6,15 @@
 '''
 import sys
 
-def debug(worker, req, rslt):
-    if not hasattr(worker, 'debugfile'):
-        if 'debugfile' in worker.app.cfg:
-            worker.debugfile = open(worker.app.cfg['debugfile'], 'w')
-        else: worker.debugfile = sys.stdout
-    print >>worker.debugfile, 'req:', req.url
-    for k, v in rslt.iteritems():
-        print >>worker.debugfile, 'key:', k
-        print >>worker.debugfile, 'value:', v
-        print >>worker.debugfile
-    print >>worker.debugfile
+def debug(app, cfg):
+    if 'debugfile' in app.cfg:
+        debugfile = open(app.cfg['debugfile'], 'w')
+    else: debugfile = sys.stdout
+    def inner(req):
+        print >>debugfile, 'req:', req.url
+        for k, v in req.result.iteritems():
+            print >>debugfile, 'key:', k
+            print >>debugfile, 'value:', v
+            print >>debugfile
+        print >>debugfile
+    return inner

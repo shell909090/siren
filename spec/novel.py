@@ -6,7 +6,10 @@
 '''
 import os, sys
 
-outfile = open('output.txt', 'w')
-def result(req, rslt):
-    outfile.write('\n%s\n\n' % rslt['title'][0].encode('utf-8'))
-    outfile.write('\n%s\n\n' % str(rslt['content'][0]))
+def result(app, cfg):
+    filename = app.cfg.get('output', 'output.txt')
+    outfile = open(filename, 'w')
+    def inner(req):
+        outfile.write('\n%s\n\n' % req.result['title'][0].encode('utf-8'))
+        outfile.write('\n%s\n\n' % str(req.result['content'][0]))
+    return inner

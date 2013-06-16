@@ -7,62 +7,67 @@
 import os, logging
 from lxml import html
 from lxml.cssselect import CSSSelector
+from bases import *
 
 logger = logging.getLogger('html')
 
-def findset(cfg, d):
-    keys = set(cfg.keys()) & set(d.keys())
-    return [d[key](cfg[key]) for key in keys]
-
-class LxmlParser(object):
-    sources = {}
-    tostrs = {}
+class LxmlSelector(RegClsBase):
+    regs = {}
     keyset = set()
 
-    def __init__(self, cfg):
-        self.cfg = cfg
-        self.src = findset(self.cfg, self.sources)[0]
-        self.tostr = findset(self.cfg, self.tostrs)[0]
+    def __init__(self, app, cfg, func):
+        self.func = func
+        r = set_cmdcfg(cfg, self.regs)
+        if len(r) == 0: raise Exception('no html selector')
+        if len(r) > 1: raise Exception('more then one html selector')
+        self.src = r[0]
 
-    @classmethod
-    def register(cls, name, funcname=None):
-        l = getattr(cls, name)
-        def inner(func):
-            fn = funcname or func.__name__
-            l[fn] = func
-            cls.keyset.add(fn)
-            return func
-        return inner
-
-    def __call__(self, req, doc, m):
+    def __call__(self, worker, req, doc):
         for node in self.src(doc):
-            s = self.tostr(node)
-            if s: yield s
+            logger.debug('%s node selected' % str(node))
+            self.func(worker, req, node)
 
-@LxmlParser.register('sources')
-def css(p):
-    sel = CSSSelector(p)
+@LxmlSelector.register()
+def css(cmdcfg):
+    sel = CSSSelector(cmdcfg)
     return lambda doc: sel(doc)
 
-@LxmlParser.register('sources')
-def xpath(p):
-    return lambda doc: doc.xpath(p)
+@LxmlSelector.register()
+def xpath(cmdcfg):
+    return lambda doc: doc.xpath(cmdcfg)
 
-@LxmlParser.register('tostrs')
-def attr(p):
-    return lambda node: node.get(p)
+class LxmlTostring(RegClsBase):
+    regs = {}
+    keyset = set()
 
-@LxmlParser.register('tostrs')
-def text(p):
+    def __init__(self, app, cfg, *funcs):
+        self.funcs = funcs
+        r = set_cmdcfg(cfg, self.regs)
+        if len(r) == 0: raise Exception('no to string translator')
+        if len(r) > 1: raise Exception('more then one translator')
+        self.tostr = r[0]
+
+    def __call__(self, worker, req, node):
+        s = self.tostr(node)
+        if not s: return
+        logger.debug('node to string: %s' % s)
+        for func in self.funcs: func(worker, req, node, s)
+
+@LxmlTostring.register()
+def attr(cmdcfg):
+    return lambda node: node.get(cmdcfg)
+
+@LxmlTostring.register()
+def text(cmdcfg):
     return lambda node: unicode(node.text_content())
 
-@LxmlParser.register('tostrs', 'html')
-def fhtml(p):
+@LxmlTostring.register()
+def fhtml(cmdcfg):
     return lambda node: html.tostring(node)
 
 # TODO: use python not exe
-@LxmlParser.register('tostrs')
-def html2text(p):
+@LxmlTostring.register()
+def html2text(cmdcfg):
     def inner(node):
         fi, fo = os.popen2('html2text -utf8')
         fi.write(html.tostring(node).decode('gbk'))
