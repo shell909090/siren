@@ -7,6 +7,6 @@
 import os, sys
 
 outfile = open('output.txt', 'w')
-def result(worker, req, rslt):
+def result(req, rslt):
     outfile.write('\n%s\n\n' % rslt['title'][0].encode('utf-8'))
     outfile.write('\n%s\n\n' % str(rslt['content'][0]))

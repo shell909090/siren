@@ -49,8 +49,8 @@ class Application(object):
         self.http = httputils.HttpHub(self.cfg)
 
         for proccfg in self.cfg['patterns']:
-            assert 'name' in p, 'without name'
-            self.processors[p['name']] = self.loadaction(proccfg)
+            assert 'name' in proccfg, 'without name'
+            self.processors[proccfg['name']] = self.loadaction(proccfg)
         del self.cfg['patterns']
 
     @classmethod
@@ -72,8 +72,8 @@ class Application(object):
             proc = self.loadfunc(req.procname)
             assert proc, "unkown python function"
         else:
-            assert req.procname in self.processor, "unknown processor name"
-            proc = self.processor[req.procname]
+            assert req.procname in self.processors, "unknown processor name"
+            proc = self.processors[req.procname]
         return proc(worker, req, req.params)
 
     def loadaction(self, proccfg):

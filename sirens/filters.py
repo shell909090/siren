@@ -85,9 +85,6 @@ class LinkFilter(object):
 
 @LinkFilter.register()
 def call(app, cmdcfg, cfg):
-    if ':' not in cmdcfg:
-        assert cmdcfg in app.processor, "unknown processor name"
-    else: assert app.loadfunc(cmdcfg), "unknown python function"
     def inner(req, doc):
         req.procname = cmdcfg
         return req
