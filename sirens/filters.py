@@ -21,6 +21,7 @@ class TxtFilter(RegClsBase):
         if 'map' in cfg: self.filter.append(eval(cfg['map']))
 
     def __call__(self, worker, req, node, s):
+        logger.debug('string is coming: ' + s)
         for f in self.filter:
             node, s = f(node, s)
             if not s: return logger.debug('failed filter')
@@ -50,6 +51,7 @@ class LinkFilter(RegClsBase):
         self.rfs = set_appcfg(app, cfg, self.regs)
 
     def __call__(self, worker, req, node, s):
+        if s.startswith('//'): s = 'http:' + s
         url = s if s.startswith('http') else urljoin(req.url, s)
         nreq = httputils.ReqInfo(None, url)
         for rf in self.rfs: nreq = rf(nreq, node)

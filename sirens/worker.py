@@ -5,23 +5,29 @@
 @author: shell.xu
 '''
 import time, logging
-import gevent.queue, beanstalkc
+import gevent.queue, gevent.pool, beanstalkc
 import httputils
 
 logger = logging.getLogger('worker')
 
 class GeventWorker(object):
 
-    def __init__(self, app):
+    def __init__(self, app, size=1):
+        self.pool = gevent.pool.Pool(size)
         self.queue = gevent.queue.JoinableQueue()
         self.done = set()
         self.app = app
-        self.result = self.app.result
+
+    def start(self):
+        self.pool.spawn(self.run)
+        self.pool.join()
 
     def run(self):
         while not self.queue.empty():
             reqsrc = self.queue.get()
             if reqsrc is None: return
+            if not self.queue.empty() and self.pool.free_count() > 0:
+                self.pool.spawn(self.run)
             req = httputils.ReqInfo.unpack(reqsrc)
             # FIXME: doing
             if req.url in self.done: continue
@@ -50,7 +56,6 @@ class BeanstalkWorker(object):
         self.queue.watch(name)
         self.queue.use(name)
         self.name, self.app, self.timeout = name, app, timeout
-        self.result = self.app.result
 
     def run(self):
         while True:

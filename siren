@@ -66,15 +66,13 @@ def run(args):
     gevent.monkey.patch_all()
     initlog(optdict.get('-l', 'INFO'))
     funcname = optdict.get('-f', 'main')
+    size = int(optdict.get('-s', '1'))
 
     app = sirens.Application(args[0])
     url = app.cfg['start'] if len(args) < 2 else args[1]
-    worker = sirens.GeventWorker(app)
+    worker = sirens.GeventWorker(app, size)
     worker.append(sirens.ReqInfo(funcname, url))
-    size = int(optdict.get('-s', '1'))
-    pool = gevent.pool.Pool(size)
-    for n in xrange(size): pool.spawn(worker.run)
-    pool.join()
+    worker.start()
 
 def worker(args):
     gevent.monkey.patch_all()
@@ -98,7 +96,7 @@ def main():
     -l: log level, DEBUG default
     -p: port
     -q: queue
-    -s: queue size, 10 default
+    -s: worker number, 1 default
     -t: timeout
     cmds: '''
     if '-h' in optdict or not args or args[0] not in cmds:

@@ -19,24 +19,29 @@ siren的特殊之处在于，定义了一组预定义的爬虫处理程序。这
 # 范例 #
 
 	name: wenku8
+	timeout: 10
+	interval: 5
 	result: novel:result
+	output: output.txt
 	patterns:
-	  - name: table of content
-		match: http://www.wenku8.cn/novel/[0-9]/[0-9]+/index.htm
-		links:
+	 
+	  - name: main
+		desc: table of content
+		parsers:
 		  - css: a
 			attr: href
 			is: "[0-9]+\\.htm"
-			callto: node
-	  - id: node
-		name: node
-		result:
-		  title:
-			css: div#title
+			call: node
+	 
+	  - name: node
+		desc: node
+		parsers:
+		  - css: div#title
 			text: yes
-		  content:
-			css: div#content
+			result: title
+		  - css: div#content
 			html2text: yes
+			result: content
 
 # 配置讲解 #
 
@@ -48,9 +53,19 @@ siren的特殊之处在于，定义了一组预定义的爬虫处理程序。这
 
 # TODO #
 
-* speed limit: Crawl-delay in robots or file config
+* do something
+  * 4chan
+  * bilibili
+  * yyets
+  * bt.ktxp.com
+  * jd
+
+* regex
+* js runner
+
 * cookie在redis中保存：加速存取效率。
 * 队列防回环(in redis)：已经爬过的维护一份列表。
+* parser in css or xpath
 
 # 授权 #
 

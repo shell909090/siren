@@ -35,6 +35,7 @@
 * text: 获得选中节点的文本内容。
 * html: 获得选中节点的html源码。
 * html2text: 将选中节点的html源码转换为text。
+* regex: get a string from regex
 
 以上头两个被成为source属性，指名处理哪个节点。后续的称为tostr，将节点转换为字符串。
 

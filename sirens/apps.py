@@ -113,7 +113,7 @@ def fdownload(app, cmdcfg, cfg):
         downdir = app.cfg['downdir']
         def download(worker, req, resp):
             filepath = path.join(downdir, path.basename(req.url))
-            with open(filepath, 'wb') as fo: fo.write(resp)
+            with open(filepath, 'wb') as fo: fo.write(resp.content)
     return download
 
 @Application.register('httpproc')

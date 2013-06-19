@@ -1,0 +1,18 @@
+name: 4chan
+disable_robots:
+downdir: .
+patterns:
+
+  - name: main
+    desc: get page indexes
+    parsers:
+      - css: div.pages a
+        attr: href
+        call: main
+      - css: a
+        attr: href
+        is: //.*.4chan.org/./src/.*.jpg
+        call: download_img
+
+  - name: download_img
+    download:
