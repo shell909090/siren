@@ -1,0 +1,10 @@
+name: yyets
+patterns:
+
+  - name: main
+    parsers:
+      - css: ul.resod_list a[type="ed2k"]
+        attr: href
+        is: ed2k://.*
+        result: ed2k
+    result: internal:debug

@@ -1,6 +1,5 @@
 name: shell909090
 start: http://shell909090.com/blog/sitemap.xml.gz
-result: internal:debug
 patterns:
 
   - name: main
@@ -16,3 +15,4 @@ patterns:
       - css: div.entry-content
         html2text: yes
         result: content
+    result: internal:debug

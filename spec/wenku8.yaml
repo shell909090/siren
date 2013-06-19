@@ -1,8 +1,6 @@
 name: wenku8
 timeout: 10
 interval: 5
-result: novel:result
-output: output.txt
 patterns:
 
   - name: main
@@ -22,3 +20,5 @@ patterns:
       - css: div#content
         html2text: yes
         result: content
+    result: novel:result
+    output: output.txt

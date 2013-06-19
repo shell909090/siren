@@ -56,16 +56,13 @@ class HttpHub(object):
         self.timeout = cfg.get('timeout')
         self.headers = cfg.get('headers')
 
-    def __call__(self, *funcs):
-        def inner(worker, req):
-            u = urlparse(req.url)
-            if u.netloc not in self.sessions:
-                sess = requests.Session()
-                sess.headers = self.headers
-                self.sessions[u.netloc] = sess
-            sess = self.sessions[u.netloc]
-            resp = sess.request(
-                req.method or 'GET', req.url, data=req.body,
-                headers=req.headers, timeout=self.timeout)
-            for func in funcs: func(worker, req, resp)
-        return inner
+    def do(self, req):
+        u = urlparse(req.url)
+        if u.netloc not in self.sessions:
+            sess = requests.Session()
+            sess.headers = self.headers
+            self.sessions[u.netloc] = sess
+        sess = self.sessions[u.netloc]
+        return sess.request(
+            req.method or 'GET', req.url, data=req.body,
+            headers=req.headers, timeout=self.timeout)

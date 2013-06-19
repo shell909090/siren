@@ -15,17 +15,8 @@ logger = logging.getLogger('application')
 
 class ParseError(StandardError): pass
 
-def lxmlwrap(app, *funcs):
-    def inner(worker, req, resp):
-        resp.encoding = chardet.detect(resp.content)['encoding']
-        doc = html.fromstring(resp.text)
-        for func in funcs: func(worker, req, doc)
-    return app.http(inner)
-
-class Application(RegNameClsBase):
-    lxmlproc = {}
-    httpproc = {}
-    keyset = set()
+class Application(object):
+    loadfunc_cache = {}
 
     def __init__(self, filepath):
         self.processors = {}
@@ -38,20 +29,17 @@ class Application(RegNameClsBase):
         if 'disable_robots' not in self.cfg:
             self.accessible = httputils.accessible
         else: self.accessible = lambda url: True
-        self.limit = None
         if 'interval' in self.cfg:
             self.limit = httputils.SpeedLimit(self.cfg['interval'])
         self.http = httputils.HttpHub(self.cfg)
 
         for proccfg in self.cfg['patterns']:
             assert 'name' in proccfg, 'without name'
-            self.processors[proccfg['name']] = self.loadaction(proccfg)
+            self.processors[proccfg['name']] = Action(self, proccfg)
         del self.cfg['patterns']
 
-    def result(self, req): print req
-
     def __call__(self, worker, req):
-        if self.limit is not None: self.limit.get(req.url)
+        if hasattr(self, 'limit'): self.limit.get(req.url)
         if ':' in req.procname:
             proc = self.loadfunc(req.procname, None)
             assert proc, "unkown python function"
@@ -60,27 +48,50 @@ class Application(RegNameClsBase):
             proc = self.processors[req.procname]
         req.result = {}
         proc(worker, req)
-        if req.result: self.result(req)
-
-    def loadaction(self, proccfg):
-        procs = set_appcfg(self, proccfg, self.lxmlproc)
-        if procs: return lxmlwrap(self, *procs)
-        procs = set_appcfg(self, proccfg, self.httpproc)
-        if procs: return self.http(*procs)
-        if 'url' in p: return self.loadfunc(p['url'], None)
-        raise ParseError('no handler for match')
+        if hasattr(req, 'result'): self.result(req)
 
     def loadfunc(self, name, cfg):
         if name is None: return None
         modname, funcname = name.split(':')
         if not modname: modname = self.cfg['file']
-        if modname == 'internal': return getattr(internal, funcname)
-        return getattr(__import__(modname), funcname)(self, cfg)
+        if modname == 'internal': mod = internal
+        else: mod = __import__(modname)
+        creator = getattr(mod, funcname)
+        if creator not in self.loadfunc_cache:
+            self.loadfunc_cache[creator] = creator(self, cfg)
+        return self.loadfunc_cache[creator]
 
-@Application.register('lxmlproc', 'lxml')
+class Action(RegNameClsBase):
+    lxmlproc = {}
+    httpproc = {}
+    keyset = set()
+
+    def __init__(self, app, actioncfg):
+        self.app = app
+        self.lxmls = list(extendlist(
+                set_appcfg(app, actioncfg, self.lxmlproc)))
+        self.https = set_appcfg(app, actioncfg, self.httpproc)
+        if 'url' in actioncfg:
+            self.func = self.loadfunc(actioncfg['url'], None)
+        if 'result' in actioncfg:
+            self.result = app.loadfunc(actioncfg['result'], actioncfg)
+        assert self.lxmls and self.https and self.func, 'no handler for match for action'
+
+    def __call__(self, worker, req):
+        if hasattr(self, 'func') and self.func(worker, req): return
+        resp = app.http.do(req)
+        if self.https:
+            for func in self.https: func(worker, req, resp)
+        if self.lxmls:
+            resp.encoding = chardet.detect(resp.content)['encoding']
+            doc = html.fromstring(resp.text)
+            for func in self.lxmls: func(worker, req, doc)
+        if hasattr(self, 'result'): self.result(req)
+
+@Action.register('lxmlproc', 'lxml')
 def flxml(app, cmdcfg, cfg): return app.loadfunc(cmdcfg, cfg)
 
-@Application.register('lxmlproc')
+@Action.register('lxmlproc')
 def parsers(app, cmdcfg, cfg):
     ps = [mkparser(app, c, cfg) for c in cmdcfg]
     def inner(worker, req, doc):
@@ -101,10 +112,10 @@ def mkparser(app, cmdcfg, cfg):
     assert cls.keyset & keys, "no selector"
     return cls(app, cmdcfg, sec)
 
-@Application.register('httpproc', 'http')
+@Action.register('httpproc', 'http')
 def fhttp(app, cmdcfg, cfg): return app.loadfunc(cmdcfg, cfg)
 
-@Application.register('httpproc', 'download')
+@Action.register('httpproc', 'download')
 def fdownload(app, cmdcfg, cfg):
     if not cmdcfg: cmdcfg = app.cfg.get('download')
     if cmdcfg: download = app.loadfunc(cmdcfg, cfg)
@@ -116,7 +127,7 @@ def fdownload(app, cmdcfg, cfg):
             with open(filepath, 'wb') as fo: fo.write(resp.content)
     return download
 
-@Application.register('httpproc')
+@Action.register('httpproc')
 def sitemap(app, cmdcfg, cfg):
     keys = set(cmdcfg.keys())
     cls = filters.LinkFilter

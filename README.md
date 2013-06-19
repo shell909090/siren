@@ -54,9 +54,7 @@ siren的特殊之处在于，定义了一组预定义的爬虫处理程序。这
 # TODO #
 
 * do something
-  * 4chan
   * bilibili
-  * yyets
   * bt.ktxp.com
   * jd
 

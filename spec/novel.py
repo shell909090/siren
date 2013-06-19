@@ -7,7 +7,8 @@
 import os, sys
 
 def result(app, cfg):
-    filename = app.cfg.get('output', 'output.txt')
+    filename = cfg.get('output')
+    if not filename: filename = app.cfg.get('output', 'output.txt')
     outfile = open(filename, 'w')
     def inner(req):
         outfile.write('\n%s\n\n' % req.result['title'][0].encode('utf-8'))

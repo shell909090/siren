@@ -13,6 +13,12 @@ def set_appcfg(app, cfg, d):
     keys = set(cfg.keys()) & set(d.keys())
     return [d[key](app, cfg[key], cfg) for key in keys]
 
+def extendlist(l):
+    for i in l:
+        if not hasattr(i, '__iter__'): yield i
+        else:
+            for j in i: yield j
+
 class RegNameClsBase(object):
     @classmethod
     def register(cls, name, funcname=None):

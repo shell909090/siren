@@ -6,7 +6,7 @@
 
 下载函数的一般性形态有以下几种：
 
-* url(worker, req, params)
+* url(worker, req, params) -> return True to continue next steps
 * http(worker, res, resp, params)
 * lxml(worker, res, doc, params)
 

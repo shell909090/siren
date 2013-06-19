@@ -22,6 +22,7 @@
 * download: 将url下载，使用指定函数处理。如果指定函数为空，使用config中的download函数进行存储。
 * http: 使用request下载内容，然后调用后面所指定的python函数。并且将结果一并传递。
 * url: 将url直接传递给后面所指定的python函数，没有下载行为。用户可以自行选择下载方式。
+* result: result function.
 
 有关python函数的指定，请看[api](API.md)。
 
