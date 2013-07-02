@@ -71,11 +71,11 @@ def run(args):
 
     app = apps.Application(args[0])
     url = app.cfg['start'] if len(args) < 2 else args[1]
-    worker = worker.GeventWorker(app, size)
-    worker.append(httputils.ReqInfo(funcname, url))
-    worker.start()
+    w = worker.GeventWorker(app, size)
+    w.append(httputils.ReqInfo(funcname, url))
+    w.start()
 
-def worker(args):
+def runworker(args):
     gevent.monkey.patch_all()
     initlog(optdict.get('-l', 'INFO'))
 
@@ -88,7 +88,7 @@ def worker(args):
                 optdict.get('-p', '11300'), int(optdict.get('-t', '10'))).run)
     pool.join()
 
-cmds=['list', 'stats', 'add', 'drop', 'run', 'worker']
+cmds=['list', 'stats', 'add', 'drop', 'run', 'runworker']
 def main():
     '''
     -f: function name
