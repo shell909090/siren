@@ -13,6 +13,10 @@ def set_appcfg(app, cfg, d):
     keys = set(cfg.keys()) & set(d.keys())
     return [d[key](app, cfg[key], cfg) for key in keys]
 
+def set_psrcfg(env, code, app, cfg, d):
+    keys = set(cfg.keys()) & set(d.keys())
+    return [d[key](env, code, app, cfg[key], cfg) for key in keys]
+
 def extendlist(l):
     for i in l:
         if not hasattr(i, '__iter__'): yield i
@@ -39,4 +43,11 @@ class RegClsBase(object):
             cls.keyset.add(fn)
             return func
         return inner
+
+def register(d, funcname=None):
+    def inner(func):
+        fn = funcname or func.__name__
+        d[fn] = func
+        return func
+    return inner
 

@@ -48,18 +48,14 @@ def parsers(app, cmdcfg, cfg):
     return [mkparser(app, c, cfg) for c in cmdcfg]
 
 def mkparser(app, cmdcfg, cfg):
-    keys = set(cmdcfg.keys())
-    secs = []
-    for cls in [filters.LinkFilter, filters.ResultFilter]:
-        if cls.keyset & keys: secs.append(cls(app, cmdcfg))
-    cls = filters.TxtFilter
-    if cls.keyset & keys: secs = [cls(app, cmdcfg, *secs),]
-    cls = html_parser.LxmlTostring
-    assert cls.keyset & keys, "no to string keyword"
-    sec = cls(app, cmdcfg, *secs)
-    cls = html_parser.LxmlSelector
-    assert cls.keyset & keys, "no selector"
-    return cls(app, cmdcfg, sec)
+    env = {'logger': logging.getLogger('*action*')}
+    code = ['def proc(worker, req, doc):',]
+    html_parser.setup(env, code, app, cmdcfg)
+    filters.setup(env, code, app, cmdcfg)
+    rslt = {}
+    logger.debug('code:\n' + '\n'.join(code))
+    eval(compile('\n'.join(code), '*internal compiled*', 'exec'), env, rslt)
+    return rslt['proc']
 
 @Action.register('httpproc', 'http')
 def fhttp(app, cmdcfg, cfg): return app.loadfunc(cmdcfg, cfg)

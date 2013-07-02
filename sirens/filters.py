@@ -11,95 +11,71 @@ from bases import *
 
 logger = logging.getLogger('filters')
 
-class TxtFilter(RegClsBase):
-    regs = {}
-    keyset = set()
+txt_filters = {}
+links = {}
+results = {}
 
-    def __init__(self, app, cfg, *funcs):
-        self.funcs = funcs
-        self.filter = set_appcfg(app, cfg, self.regs)
-        if 'map' in cfg: self.filter.append(eval(cfg['map']))
+def setup(env, code, app, cmdcfg):
+    code.append('    logger.debug("string is coming: " + s)')
+    set_psrcfg(env, code, app, cmdcfg, txt_filters)
+    code.append('    logger.debug("passed filter")')
 
-    def __call__(self, worker, req, node, s):
-        logger.debug('string is coming: ' + s)
-        for f in self.filter:
-            node, s = f(node, s)
-            if not s: return logger.debug('failed filter')
-        logger.debug('passed filter')
-        for func in self.funcs: func(worker, req, node, s)
+    r = set_psrcfg(env, code, app, cmdcfg, links)
+    if len(r) > 0:
+        code.append('    assert nreq.procname, "dont know which processor to call."')
+        code.append('    assert nreq.url, "request without url"')
+        code.append("    worker.append(nreq)")
 
-@TxtFilter.register('is')
-def fis(app, cmdcfg, cfg):
-    reis = re.compile(cmdcfg)
-    return lambda node, s: (node, s) if reis.match(s) else (None, None)
+    set_psrcfg(env, code, app, cmdcfg, results)
 
-@TxtFilter.register()
-def isnot(app, cmdcfg, cfg):
-    reisnot = re.compile(cmdcfg)
-    return lambda node, s: (None, None) if reisnot.match(s) else (node, s)
+@register(txt_filters, 'is')
+def fis(env, code, app, cmdcfg, cfg):
+    env['reis'] = re.compile(cmdcfg)
+    code.append('    if not reis.match(s): continue')
 
-@TxtFilter.register()
-def dictreplace(app, cmdcfg, cfg):
-    r = re.compile(cmdcfg[0])
-    return lambda node, s: node, cmdcfg[1].format(**r.match(s).groupdict())
+@register(txt_filters)
+def isnot(env, code, app, cmdcfg, cfg):
+    env['reisnot'] = re.compile(cmdcfg)
+    code.append('    if reisnot.match(s): continue')
 
-class LinkFilter(RegClsBase):
-    regs = {}
-    keyset = set()
+@register(txt_filters)
+def dictreplace(env, code, app, cmdcfg, cfg):
+    env['replace_re'] = re.compile(cmdcfg[0])
+    env['replace_to'] = cmdcfg[1]
+    code.append('    s = replace_to.format(**replace_re.match(s).groupdict())')
 
-    def __init__(self, app, cfg):
-        self.rfs = set_appcfg(app, cfg, self.regs)
+@register(txt_filters, 'map')
+def fmap(env, code, app, cmdcfg, cfg):
+    env['mapfunc'] = app.loadfunc(cmdcfg, cfg)
+    code.append('    s = mapfunc(s)')
 
-    def __call__(self, worker, req, node, s):
-        if s.startswith('//'): s = 'http:' + s
-        url = s if s.startswith('http') else urljoin(req.url, s)
-        nreq = httputils.ReqInfo(None, url)
-        for rf in self.rfs: nreq = rf(nreq, node)
-        assert nreq.procname, "dont know which processor to call."
-        assert nreq.url, "request without url"
-        worker.append(nreq)
-
-@LinkFilter.register()
-def call(app, cmdcfg, cfg):
-    def inner(req, doc):
-        req.procname = cmdcfg
-        return req
-    return inner
+@register(links)
+def call(env, code, app, cmdcfg, cfg):
+    env['urljoin'] = urljoin
+    env['ReqInfo'] = httputils.ReqInfo
+    env['call'] = cmdcfg
+    code.append("    if s.startswith('//'): s = 'http:' + s")
+    code.append("    url = s if s.startswith('http') else urljoin(req.url, s)")
+    code.append("    nreq = ReqInfo(None, url)")
+    code.append("    nreq.procname = call")
 
 # TODO:
-@LinkFilter.register()
-def params(app, cmdcfg, cfg):
-    def inner(req, doc): return req
-    return inner
+@register(links)
+def params(env, code, app, cmdcfg, cfg):
+    pass
 
-@LinkFilter.register()
-def headers(app, cmdcfg, cfg):
-    def inner(req, doc):
-        req.headers = cmdcfg
-        return req
-    return inner
+@register(links)
+def headers(env, code, app, cmdcfg, cfg):
+    env['headers'] = cmdcfg
+    code.append('    nreq.headers = headers')
 
-@LinkFilter.register()
-def method(app, cmdcfg, cfg):
-    cmdcfg = cmdcfg.upper()
-    def inner(req, doc):
-        req.method = cmdcfg
-        return req
-    return inner
+@register(links)
+def method(env, code, app, cmdcfg, cfg):
+    env['method'] = cmdcfg.upper()
+    code.append('    nreq.method = method')
 
-class ResultFilter(RegClsBase):
-    regs = {}
-    keyset = set()
-
-    def __init__(self, app, cfg):
-        self.result = set_appcfg(app, cfg, self.regs)
-
-    def __call__(self, worker, req, node, s):
-        for r in self.result: r(req, s)
-
-@ResultFilter.register()
-def result(app, cmdcfg, cfg):
-    def inner(req, s):
-        req.result.setdefault(cmdcfg, [])
-        req.result[cmdcfg].append(s)
-    return inner
+@register(results)
+def result(env, code, app, cmdcfg, cfg):
+    env['result'] = cmdcfg
+    code.append('    req.result.setdefault(result, [])')
+    code.append('    req.result[result].append(s)')

@@ -11,66 +11,51 @@ from bases import *
 
 logger = logging.getLogger('html')
 
-class LxmlSelector(RegClsBase):
-    regs = {}
-    keyset = set()
+selectors = {}
+to_strings = {}
 
-    def __init__(self, app, cfg, func):
-        self.func = func
-        r = set_cmdcfg(cfg, self.regs)
-        if len(r) == 0: raise Exception('no html selector')
-        if len(r) > 1: raise Exception('more then one html selector')
-        self.src = r[0]
+def setup(env, code, app, cmdcfg):
+    r = set_psrcfg(env, code, app, cmdcfg, selectors)
+    if len(r) == 0: raise Exception('no html selector')
+    if len(r) > 1: raise Exception('more then one html selector')
+    code.append("    logger.debug('%s node selected' % str(node))")
 
-    def __call__(self, worker, req, doc):
-        for node in self.src(doc):
-            logger.debug('%s node selected' % str(node))
-            self.func(worker, req, node)
+    r = set_psrcfg(env, code, app, cmdcfg, to_strings)
+    if len(r) == 0: raise Exception('no to string translator')
+    if len(r) > 1: raise Exception('more then one translator')
+    code.append('    if not s: continue')
+    code.append("    logger.debug('node to string: %s' % s)")
 
-@LxmlSelector.register()
-def css(cmdcfg):
-    sel = CSSSelector(cmdcfg)
-    return lambda doc: sel(doc)
+@register(selectors)
+def css(env, code, app, cmdcfg, cfg):
+    env['css'] = CSSSelector(cmdcfg)
+    code.append('  for node in css(doc):')
 
-@LxmlSelector.register()
-def xpath(cmdcfg):
-    return lambda doc: doc.xpath(cmdcfg)
+@register(selectors)
+def xpath(env, code, app, cmdcfg, cfg):
+    env['xpath'] = cmdcfg
+    code.append('  for node in doc.xpath(xpath):')
 
-class LxmlTostring(RegClsBase):
-    regs = {}
-    keyset = set()
+@register(to_strings)
+def attr(env, code, app, cmdcfg, cfg):
+    env['attr'] = cmdcfg
+    code.append('    s = node.get(attr)')
 
-    def __init__(self, app, cfg, *funcs):
-        self.funcs = funcs
-        r = set_cmdcfg(cfg, self.regs)
-        if len(r) == 0: raise Exception('no to string translator')
-        if len(r) > 1: raise Exception('more then one translator')
-        self.tostr = r[0]
+@register(to_strings)
+def text(env, code, app, cmdcfg, cfg):
+    code.append('    s = unicode(node.text_content())')
 
-    def __call__(self, worker, req, node):
-        s = self.tostr(node)
-        if not s: return
-        logger.debug('node to string: %s' % s)
-        for func in self.funcs: func(worker, req, node, s)
-
-@LxmlTostring.register()
-def attr(cmdcfg):
-    return lambda node: node.get(cmdcfg)
-
-@LxmlTostring.register()
-def text(cmdcfg):
-    return lambda node: unicode(node.text_content())
-
-@LxmlTostring.register()
-def fhtml(cmdcfg):
-    return lambda node: html.tostring(node)
+@register(to_strings, 'html')
+def fhtml(env, code, app, cmdcfg, cfg):
+    env['html'] = html
+    code.append('    html.tostring(node)')
 
 # TODO: use python not exe
-@LxmlTostring.register()
-def html2text(cmdcfg):
-    def inner(node):
-        fi, fo = os.popen2('html2text -utf8')
-        fi.write(html.tostring(node).decode('gbk'))
-        fi.close()
-        return fo.read()
-    return inner
+@register(to_strings)
+def html2text(env, code, app, cmdcfg, cfg):
+    env['os'] = os
+    env['html'] = html
+    code.append("    fi, fo = os.popen2('html2text -utf8')")
+    code.append("    fi.write(html.tostring(node).decode('gbk'))")
+    code.append("    fi.close()")
+    code.append("    s = fo.read()")
